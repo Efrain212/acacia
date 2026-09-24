@@ -453,9 +453,36 @@ document.querySelectorAll(".acc-head[data-acc]").forEach(b=>b.onclick=(e)=>{ e.p
 document.getElementById("closeCheckout").onclick = ()=>checkoutModal.hidden=true;
 checkoutModal.addEventListener("click", e=>{ if(e.target===checkoutModal) checkoutModal.hidden=true; });
 document.getElementById("ckForm").addEventListener("submit", e=>e.preventDefault());
-document.getElementById("toStep2").onclick = ()=>gotoStep(2);
+function ckErr(wrap, valid){
+  const w = document.getElementById(wrap);
+  if(w){ w.classList.toggle("bad", !valid); const e = w.querySelector(".err"); if(e) e.hidden = !!valid; }
+  return !!valid;
+}
+function validStep1(){
+  let ok = true, first = null;
+  const need = (wrap, valid)=>{ if(!ckErr(wrap, valid) && !first) first = wrap; ok = ok && valid; };
+  need("w-fName", document.getElementById("fName").value.trim().length >= 4);
+  need("w-fEmail", /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById("fEmail").value.trim()));
+  need("w-fDni", /^\d{7,8}$/.test(document.getElementById("fDni").value.trim()));
+  need("w-fPhone", document.getElementById("fPhone").value.replace(/\D/g,"").length >= 8);
+  if(first) document.querySelector("#"+first+" input")?.focus();
+  return ok;
+}
+function validStep2(){
+  if(shipMode === "ret") return true;
+  let ok = true, first = null;
+  const need = (wrap, valid)=>{ if(!ckErr(wrap, valid) && !first) first = wrap; ok = ok && valid; };
+  need("w-fCalle", document.getElementById("fCalle").value.trim().length >= 3);
+  need("w-fNum", document.getElementById("fNum").value.trim().length >= 1);
+  need("w-fDest", document.getElementById("fDest").value.trim().length >= 3);
+  need("w-fFecha", !!document.getElementById("fFecha").value);
+  if(!validCP()) ok = false;
+  if(first) document.querySelector("#"+first+" input")?.focus();
+  return ok;
+}
+document.getElementById("toStep2").onclick = ()=>{ if(validStep1()) gotoStep(2); };
 document.getElementById("backStep1").onclick = ()=>gotoStep(1);
-document.getElementById("toStep3").onclick = ()=>gotoStep(3);
+document.getElementById("toStep3").onclick = ()=>{ if(validStep2()) gotoStep(3); };
 document.getElementById("backStep2").onclick = ()=>gotoStep(2);
 document.getElementById("fillSaved").onclick = ()=>{ fillCheckoutForm(getSavedData()); };
 function setShipMode(m){

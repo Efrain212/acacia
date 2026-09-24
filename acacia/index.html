@@ -262,12 +262,12 @@
             <button id="fillSaved" type="button" class="btn ghost full">Rellenar con mis datos guardados</button>
           </div>
           <div class="row2">
-            <input id="fName" name="name" autocomplete="name" placeholder="Nombre y apellido" />
-            <input id="fEmail" name="email" autocomplete="email" placeholder="Email" type="email" />
+            <div class="field" id="w-fName"><input id="fName" name="name" autocomplete="name" placeholder="Nombre y apellido *" /><span class="err" hidden>✕ Nombre y apellido</span></div>
+            <div class="field" id="w-fEmail"><input id="fEmail" name="email" autocomplete="email" placeholder="Email *" type="email" /><span class="err" hidden>✕ Email válido</span></div>
           </div>
           <div class="row2">
-            <input id="fDni" name="dni" autocomplete="national-identification-number" placeholder="DNI" inputmode="numeric" maxlength="8" />
-            <input id="fPhone" name="tel" autocomplete="tel-national" placeholder="Tel / WhatsApp ej 2645874999" inputmode="tel" />
+            <div class="field" id="w-fDni"><input id="fDni" name="dni" autocomplete="national-identification-number" placeholder="DNI *" inputmode="numeric" maxlength="8" /><span class="err" hidden>✕ DNI 7-8 dígitos</span></div>
+            <div class="field" id="w-fPhone"><input id="fPhone" name="tel" autocomplete="tel-national" placeholder="Tel / WhatsApp *" inputmode="tel" /><span class="err" hidden>✕ Teléfono (mín 8 dígitos)</span></div>
           </div>
           <label class="muted small" style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="saveData" checked style="width:auto" /> Guardar nombre, DNI y teléfono en este dispositivo</label>
           <button id="toStep2" type="button" class="btn primary full">Continuar a entrega</button>
@@ -292,17 +292,17 @@
             </div>
 
             <div class="addr-grid">
-              <div><label>Calle</label><div class="valid-wrap"><input id="fCalle" placeholder="Dirección" autocomplete="street-address" /><span class="v-ico" id="vCalle">🔴</span></div></div>
-              <div><label>Número</label><input id="fNum" placeholder="1004" inputmode="numeric" /></div>
+              <div><label>Calle *</label><div class="field" id="w-fCalle"><div class="valid-wrap"><input id="fCalle" placeholder="Dirección *" autocomplete="street-address" /><span class="v-ico" id="vCalle">🔴</span></div><span class="err" hidden>✕ Calle</span></div></div>
+              <div><label>Número *</label><div class="field" id="w-fNum"><input id="fNum" placeholder="1004 *" inputmode="numeric" /><span class="err" hidden>✕ Número</span></div></div>
               <div><label>Información adicional (ej.: dpto. 201)</label><input id="fExtra" placeholder="Información adicional" /></div>
-              <div><label>Destinatario</label><div class="valid-wrap"><input id="fDest" placeholder="efrain ogas" autocomplete="name" /><span class="v-ico" id="vDest">✅</span></div></div>
+              <div><label>Destinatario *</label><div class="field" id="w-fDest"><div class="valid-wrap"><input id="fDest" placeholder="Nombre destinatario *" autocomplete="name" /><span class="v-ico" id="vDest">✅</span></div><span class="err" hidden>✕ Destinatario</span></div></div>
               <div><label>Provincia</label><select id="fProv" autocomplete="address-level1"></select></div>
               <div><label>Localidad</label><select id="fCitySel" autocomplete="address-level2"></select></div>
             </div>
             <input id="fAddr" hidden /><input id="fCity" hidden />
 
             <label class="cuota-opt" style="margin-top:10px"><input type="radio" checked /> <span>Programar todos</span></label>
-            <input id="fFecha" type="date" style="margin-top:8px" />
+            <div class="field" id="w-fFecha"><input id="fFecha" type="date" style="margin-top:8px" /><span class="err" hidden>✕ Elegí fecha de entrega</span></div>
           </div>
 
           <div id="retiroBox" hidden class="addr-card">
@@ -476,6 +476,6 @@
   </div>
 </div>
 
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>
