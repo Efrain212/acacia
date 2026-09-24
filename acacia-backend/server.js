@@ -266,6 +266,13 @@ const ADMIN_PASS = process.env.ADMIN_PASS || 'aca.admin98';
 const adminTokens = new Map();
 async function initShopTables(){
   const p = await db();
+  await p.query(`CREATE TABLE IF NOT EXISTS clientes (
+    id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) NOT NULL UNIQUE,
+    usuario VARCHAR(60) UNIQUE, pass_hash VARCHAR(255),
+    nombre VARCHAR(100) NOT NULL, apellido VARCHAR(100) NOT NULL,
+    dni VARCHAR(20) DEFAULT '', telefono VARCHAR(40) DEFAULT '',
+    nacimiento DATE NULL, acepto_terminos TINYINT(1) DEFAULT 1,
+    puntos INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
   await p.query(`CREATE TABLE IF NOT EXISTS productos (
     id VARCHAR(60) PRIMARY KEY, nombre VARCHAR(120) NOT NULL, precio INT NOT NULL DEFAULT 0,
     categoria VARCHAR(40) DEFAULT 'mujer', color VARCHAR(40) DEFAULT '', img TEXT DEFAULT '',
@@ -456,4 +463,7 @@ app.post('/api/create-preference', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log('Acacia backend en http://localhost:' + PORT));
+app.listen(PORT, () => {
+  console.log('Acacia backend en http://localhost:' + PORT);
+  initShopTables().then(()=>console.log('Tablas listas')).catch(e=>console.log('Tablas pendientes:', e.message));
+});
