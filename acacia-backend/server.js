@@ -275,11 +275,11 @@ async function initShopTables(){
     puntos INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
   await p.query(`CREATE TABLE IF NOT EXISTS productos (
     id VARCHAR(60) PRIMARY KEY, nombre VARCHAR(120) NOT NULL, precio INT NOT NULL DEFAULT 0,
-    categoria VARCHAR(40) DEFAULT 'mujer', color VARCHAR(40) DEFAULT '', img TEXT DEFAULT '',
-    descrip TEXT DEFAULT '', stock INT DEFAULT 10)`);
+    categoria VARCHAR(40) DEFAULT 'mujer', color VARCHAR(40) DEFAULT '', img TEXT,
+    descrip TEXT, stock INT DEFAULT 10)`);
   await p.query(`CREATE TABLE IF NOT EXISTS pedidos (
     id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) DEFAULT '', total INT DEFAULT 0,
-    provincia VARCHAR(80) DEFAULT '', items TEXT DEFAULT '', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    provincia VARCHAR(80) DEFAULT '', items TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX(email), INDEX(provincia))`);
   await p.query(`CREATE TABLE IF NOT EXISTS visitas (
     id INT AUTO_INCREMENT PRIMARY KEY, pagina VARCHAR(120) DEFAULT '', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
