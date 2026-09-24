@@ -3,7 +3,7 @@ const WHATSAPP_NUMBER_2 = "5492645063736";
 // FASE 2 (producción full): backend online con miembros, puntos, admin y visitas.
 const BACKEND_ENABLED = true;
 const AUTH_URL_LOCAL = "http://localhost:3001";
-const AUTH_URL_PROD = "https://TU-BACKEND.up.railway.app"; // <-- reemplazá con tu URL de Railway al desplegar
+const AUTH_URL_PROD = "https://acacia-production-0a93.up.railway.app";
 const AUTH_URL = (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:") ? AUTH_URL_LOCAL : AUTH_URL_PROD;
 // NARANJA X - datos reales
 const NX_ALIAS = "acacia.2026";
