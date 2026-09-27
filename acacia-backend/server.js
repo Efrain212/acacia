@@ -308,9 +308,61 @@ app.post('/api/admin/login', (req, res) => {
   res.status(401).json({ error: 'Usuario o contraseña admin incorrectos' });
 });
 // Productos públicos (con stock). Si MySQL cae, el front usa lista local.
+// Galería de fotos por producto (sin límite)
+async function ensureFotos(p){
+  await p.query(`CREATE TABLE IF NOT EXISTS producto_fotos (
+    id INT AUTO_INCREMENT PRIMARY KEY, producto_id VARCHAR(60) NOT NULL,
+    url TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(producto_id))`);
+}
+app.get('/api/admin/fotos/:pid', requireAdmin, async (req, res) => {
+  try {
+    const p = await db();
+    await ensureFotos(p);
+    // migrar foto principal si la galería está vacía
+    const [g] = await p.query('SELECT * FROM producto_fotos WHERE producto_id=? ORDER BY id', [req.params.pid]);
+    if(!g.length){
+      const [pr] = await p.query('SELECT img FROM productos WHERE id=?', [req.params.pid]);
+      if(pr.length && pr[0].img) await p.query('INSERT INTO producto_fotos (producto_id, url) VALUES (?,?)', [req.params.pid, pr[0].img]);
+    }
+    const [rows] = await p.query('SELECT * FROM producto_fotos WHERE producto_id=? ORDER BY id', [req.params.pid]);
+    res.json({ ok: true, fotos: rows });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+app.post('/api/admin/fotos', requireAdmin, async (req, res) => {
+  try {
+    const { producto_id, url } = req.body || {};
+    if(!producto_id || !url) return res.status(400).json({ error: 'Falta foto' });
+    const p = await db();
+    await ensureFotos(p);
+    const [r] = await p.query('INSERT INTO producto_fotos (producto_id, url) VALUES (?,?)', [producto_id, url]);
+    // si el producto no tiene foto principal, usar la primera
+    await p.query("UPDATE productos SET img=COALESCE(NULLIF(img,''), ?) WHERE id=?", [url, producto_id]);
+    res.json({ ok: true, id: r.insertId });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+app.delete('/api/admin/fotos/:id', requireAdmin, async (req, res) => {
+  try {
+    const p = await db();
+    const [rows] = await p.query('SELECT producto_id FROM producto_fotos WHERE id=?', [req.params.id]);
+    await p.query('DELETE FROM producto_fotos WHERE id=?', [req.params.id]);
+    if(rows.length){
+      const [g] = await p.query('SELECT url FROM producto_fotos WHERE producto_id=? ORDER BY id LIMIT 1', [rows[0].producto_id]);
+      await p.query('UPDATE productos SET img=? WHERE id=?', [g.length ? g[0].url : '', rows[0].producto_id]);
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
 app.get('/api/productos', async (req, res) => {
-  try { await initShopTables(); const [rows] = await (await db()).query('SELECT * FROM productos'); res.json({ ok: true, productos: rows }); }
-  catch(e) { res.status(500).json({ error: 'Sin DB' }); }
+  try {
+    await initShopTables();
+    const p = await db();
+    await ensureFotos(p);
+    const [rows] = await p.query('SELECT * FROM productos');
+    const [fotos] = await p.query('SELECT producto_id, url FROM producto_fotos ORDER BY id');
+    const map = {};
+    fotos.forEach(f=>{ (map[f.producto_id] = map[f.producto_id] || []).push(f.url); });
+    res.json({ ok: true, productos: rows.map(r=>({ ...r, fotos: map[r.id] || (r.img ? [r.img] : []) })) });
+  } catch(e) { res.status(500).json({ error: 'Sin DB' }); }
 });
 // Visita (contador de visualizaciones)
 app.post('/api/visita', async (req, res) => {
