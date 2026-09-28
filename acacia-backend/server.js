@@ -273,6 +273,10 @@ async function initShopTables(){
     dni VARCHAR(20) DEFAULT '', telefono VARCHAR(40) DEFAULT '',
     nacimiento DATE NULL, acepto_terminos TINYINT(1) DEFAULT 1,
     puntos INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
+  for(const q of ['ALTER TABLE clientes MODIFY pass_hash VARCHAR(255) NULL',
+    'ALTER TABLE clientes MODIFY usuario VARCHAR(60) NULL']) {
+    try { await p.query(q); } catch {}
+  }
   await p.query(`CREATE TABLE IF NOT EXISTS productos (
     id VARCHAR(60) PRIMARY KEY, nombre VARCHAR(120) NOT NULL, precio INT NOT NULL DEFAULT 0,
     categoria VARCHAR(40) DEFAULT 'mujer', color VARCHAR(40) DEFAULT '', img TEXT,
@@ -352,6 +356,32 @@ app.delete('/api/admin/fotos/:id', requireAdmin, async (req, res) => {
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Error' }); }
 });
+// Textos editables del sitio (clave/valor). Públicos para leer, admin para guardar.
+async function ensureAjustes(p){
+  await p.query(`CREATE TABLE IF NOT EXISTS ajustes (clave VARCHAR(80) PRIMARY KEY, valor TEXT)`);
+}
+app.get('/api/ajustes', async (req, res) => {
+  try {
+    const p = await db();
+    await ensureAjustes(p);
+    const [rows] = await p.query('SELECT clave, valor FROM ajustes');
+    const out = {};
+    rows.forEach(r=>out[r.clave] = r.valor);
+    res.json({ ok: true, ajustes: out });
+  } catch(e) { res.json({ ok: true, ajustes: {} }); }
+});
+app.put('/api/admin/ajustes', requireAdmin, async (req, res) => {
+  try {
+    const p = await db();
+    await ensureAjustes(p);
+    const data = req.body || {};
+    for(const k of Object.keys(data).slice(0, 40)){
+      if(!/^[a-zA-Z0-9_]{1,60}$/.test(k)) continue;
+      await p.query('INSERT INTO ajustes (clave, valor) VALUES (?,?) ON DUPLICATE KEY UPDATE valor=VALUES(valor)', [k, String(data[k] ?? '').slice(0, 2000)]);
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
 app.get('/api/productos', async (req, res) => {
   try {
     await initShopTables();
@@ -426,6 +456,95 @@ app.post('/api/admin/upload', requireAdmin, async (req, res) => {
       res.json({ ok: true, url: '/uploads/' + req.file.filename, full: `http://localhost:${PORT}/uploads/` + req.file.filename });
     });
   } catch(e) { res.status(500).json({ error: 'Error subiendo' }); }
+});
+// Login sin contraseña: código de 6 dígitos al Gmail (rápido, sin registrarse antes)
+async function ensureCodigos(p){
+  await p.query(`CREATE TABLE IF NOT EXISTS codigos (
+    id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) NOT NULL,
+    codigo CHAR(6) NOT NULL, expira DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(email))`);
+}
+app.post('/api/auth/codigo', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email inválido' });
+    const p = await db();
+    await ensureCodigos(p);
+    const code = genCode();
+    await p.query('INSERT INTO codigos (email, codigo, expira) VALUES (?,?,?)', [email, code, new Date(Date.now()+10*60*1000)]);
+    try { await sendCodeByGmail(email, code); }
+    catch(e) { return res.status(500).json({ error: 'No pude enviar el Gmail. Revisá GMAIL_USER/APP_PASS.' }); }
+    res.json({ ok: true, sent: true });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+app.post('/api/auth/entrar-codigo', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const codigo = String(req.body?.codigo || '').trim();
+    if(!/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'Código 6 dígitos' });
+    const p = await db();
+    await ensureCodigos(p);
+    const [rows] = await p.query('SELECT * FROM codigos WHERE email=? ORDER BY id DESC LIMIT 1', [email]);
+    if(!rows.length || rows[0].codigo !== codigo || new Date(rows[0].expira) < new Date())
+      return res.status(400).json({ error: 'Código incorrecto o vencido' });
+    let [cli] = await p.query('SELECT email, usuario, nombre, apellido FROM clientes WHERE email=?', [email]);
+    if(!cli.length){
+      const base = email.split('@')[0].replace(/[^a-z0-9_.]/g,'').slice(0,20) || 'miembro';
+      let usuario = base, k = 0;
+      while(true){
+        const [ex] = await p.query('SELECT id FROM clientes WHERE usuario=?', [usuario]);
+        if(!ex.length) break;
+        usuario = base + (++k);
+      }
+      const nm = base.charAt(0).toUpperCase() + base.slice(1);
+      await p.query('INSERT INTO clientes (email,usuario,nombre,apellido,dni,telefono) VALUES (?,?,?,?,?,?)', [email, usuario, nm, '', '', '']);
+      [cli] = await p.query('SELECT email, usuario, nombre, apellido FROM clientes WHERE email=?', [email]);
+    }
+    res.json({ ok: true, user: cli[0] });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+// Login con Google (idToken verificado) y Facebook (accessToken verificado)
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { idToken } = req.body || {};
+    if(!idToken) return res.status(400).json({ error: 'Falta token' });
+    const vr = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + idToken);
+    const info = await vr.json();
+    if(!vr.ok || !info.email) return res.status(401).json({ error: 'Token Google inválido' });
+    if(process.env.GOOGLE_CLIENT_ID && info.aud !== process.env.GOOGLE_CLIENT_ID)
+      return res.status(401).json({ error: 'Token de otra app' });
+    const email = String(info.email).toLowerCase();
+    const p = await db();
+    let [cli] = await p.query('SELECT email, usuario, nombre, apellido FROM clientes WHERE email=?', [email]);
+    if(!cli.length){
+      const base = email.split('@')[0].replace(/[^a-z0-9_.]/g,'').slice(0,20) || 'miembro';
+      let usuario = base, k = 0;
+      while(true){ const [ex] = await p.query('SELECT id FROM clientes WHERE usuario=?', [usuario]); if(!ex.length) break; usuario = base + (++k); }
+      await p.query('INSERT INTO clientes (email,usuario,nombre,apellido,dni,telefono) VALUES (?,?,?,?,?,?)', [email, usuario, info.given_name || base, info.family_name || '', '', '']);
+      [cli] = await p.query('SELECT email, usuario, nombre, apellido FROM clientes WHERE email=?', [email]);
+    }
+    res.json({ ok: true, user: cli[0] });
+  } catch(e) { console.log('google:', e.message); res.status(500).json({ error: 'Error Google: ' + e.message }); }
+});
+app.post('/api/auth/facebook', async (req, res) => {
+  try {
+    const { accessToken } = req.body || {};
+    if(!accessToken) return res.status(400).json({ error: 'Falta token' });
+    const vr = await fetch('https://graph.facebook.com/me?fields=id,name,email,first_name,last_name&access_token=' + encodeURIComponent(accessToken));
+    const info = await vr.json();
+    if(!vr.ok || !info.id) return res.status(401).json({ error: 'Token Facebook inválido' });
+    const email = (info.email || `fb${info.id}@facebook.local`).toLowerCase();
+    const p = await db();
+    let [cli] = await p.query('SELECT email, usuario, nombre, apellido FROM clientes WHERE email=?', [email]);
+    if(!cli.length){
+      const base = (email.split('@')[0] || 'miembro').replace(/[^a-z0-9_.]/g,'').slice(0,20) || 'miembro';
+      let usuario = base, k = 0;
+      while(true){ const [ex] = await p.query('SELECT id FROM clientes WHERE usuario=?', [usuario]); if(!ex.length) break; usuario = base + (++k); }
+      await p.query('INSERT INTO clientes (email,usuario,nombre,apellido,dni,telefono) VALUES (?,?,?,?,?,?)', [email, usuario, info.first_name || base, info.last_name || '', '', '']);
+      [cli] = await p.query('SELECT email, usuario, nombre, apellido FROM clientes WHERE email=?', [email]);
+    }
+    res.json({ ok: true, user: cli[0] });
+  } catch(e) { res.status(500).json({ error: 'Error Facebook' }); }
 });
 // POST /api/auth/request-code { email } (legado, se mantiene por compatibilidad)
 app.post('/api/auth/request-code', async (req, res) => {
