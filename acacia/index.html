@@ -14,25 +14,43 @@
     <a href="#inicio" class="logo"><img src="logo.png" alt="Acacia indumentaria" /> <span>ACACIA <span>indumentaria</span></span></a>
     <nav class="nav" id="nav">
       <a href="#inicio">Inicio</a>
-      <a href="#productos">Productos</a>
-      <a href="#miembros">Miembros</a>
-      <a href="#contacto">Contacto</a>
+      <div class="has-drop">
+        <a href="#productos">Productos</a>
+        <div class="mega" id="megaMenu"></div>
+      </div>
+      <a href="#/miembros">Miembros</a>
+      <a href="#/contacto">Contacto</a>
     </nav>
     <div class="header-actions">
       <input id="searchInput" type="search" placeholder="Buscar..." aria-label="Buscar productos" />
       <button id="accountBtn" class="cart-btn" aria-label="Mi cuenta" title="Registrate / Login">👤 <span id="accountName"></span></button>
+      <div id="accountMenu" hidden>
+        <strong>Mi Cuenta</strong>
+        <a href="#/cuenta/perfil">Perfil</a>
+        <a href="#/cuenta/ordenes">Órdenes</a>
+        <a href="#/cuenta/favoritos">Favoritos</a>
+        <a href="#/cuenta/ajustes">Configuración de la cuenta</a>
+        <hr />
+        <button type="button" id="menuLogout">Salir</button>
+      </div>
       <button id="cartBtn" class="cart-btn" aria-label="Abrir carrito">🛒 <span id="cartCount">0</span></button>
       <button id="menuBtn" class="menu-btn" aria-label="Menú">☰</button>
     </div>
   </div>
-  <div class="topbar">Lo mejor ha llegado y es Acacia — envíos a toda la provincia</div>
+  <aside id="sideMenu" aria-hidden="true">
+    <button id="closeMenu" aria-label="Cerrar menú">✕</button>
+    <img src="logo.png" alt="Acacia" />
+    <nav id="sideNav"></nav>
+  </aside>
+  <div id="menuOverlay" hidden></div>
+  <div class="topbar" id="tTopbar">Lo mejor ha llegado y es Acacia — envíos a toda la provincia</div>
 </header>
 
 <main>
 <section class="promo-banner container">
   <div>
-    <strong>Registrate gratis para acceder a promociones y descuentos de Acacia</strong>
-    <span class="muted small">Miembros: cupones + Plan Z + avisos.</span>
+    <strong id="tPromoTitle">Registrate gratis para acceder a promociones y descuentos de Acacia</strong>
+    <span class="muted small" id="tPromoSub">Miembros: cupones + Plan Z + avisos.</span>
   </div>
   <button id="openAuth" type="button" class="btn primary">Registrate / Login</button>
   <span id="authState" class="muted small"></span>
@@ -40,12 +58,12 @@
 <section id="inicio" class="hero">
   <div class="container hero-inner">
     <div>
-      <p class="eyebrow">Nueva colección</p>
-      <h1>Bienvenidos a Acacia</h1>
-      <p class="subtitle">Indumentaria Mujer & Hombre. Compra simple y coordinamos por WhatsApp.</p>
+      <p class="eyebrow" id="tHeroEyebrow">Nueva colección</p>
+      <h1 id="tHeroTitle">Bienvenidos a Acacia</h1>
+      <p class="subtitle" id="tHeroSub">Indumentaria Mujer & Hombre. Compra simple y coordinamos por WhatsApp.</p>
       <div class="hero-cta">
         <a href="#productos" class="btn primary">Ver productos</a>
-        <a href="#contacto" class="btn ghost">Contacto</a>
+        <a href="#/contacto" class="btn ghost">Contacto</a>
       </div>
     </div>
     <div class="hero-card" id="heroCar">
@@ -58,10 +76,53 @@
   </div>
 </section>
 
+<section id="shopBanner" class="container shop-banner">
+  <a href="#/hombre" class="shop-panel"><img id="shopHombreImg" src="Modelo-hombre.png" alt="Hombre" onerror="this.style.display='none'" /><span class="pill">Hombre</span></a>
+  <a href="#/mujer" class="shop-panel panel-mujer"><img id="shopMujerImg" src="Modelo-mujer.png" alt="Mujer" onerror="this.style.display='none'" /><span class="pill">Mujer</span></a>
+</section>
+
 <section id="categorias" class="container categories">
   <a href="#productos" data-cat-link="mujer" class="cat-card"><h3>Mujer</h3><p>Polleras, vestidos y más</p></a>
   <a href="#productos" data-cat-link="hombre" class="cat-card"><h3>Hombre</h3><p>Shorts, conjuntos de Lino y Mas</p></a>
   <a href="#productos" data-cat-link="todos" class="cat-card"><h3>Ver todo</h3><p>Catálogo completo</p></a>
+</section>
+
+<section id="prodpage" class="container" hidden>
+  <p class="crumbs"><a href="#inicio">Inicio</a> / <a href="#/mujer" id="ppCrumbCat">Mujer</a> / <span id="ppCrumbName"></span></p>
+  <div class="pp-layout">
+    <div>
+      <img id="ppImg" alt="" />
+      <div class="gal" id="ppThumbs" style="margin-top:8px"></div>
+    </div>
+    <div>
+      <h2 id="ppName"></h2>
+      <p class="price big" id="ppPrice"></p>
+      <p class="muted" id="ppCuotas"></p>
+      <p class="muted small" id="ppMeta"></p>
+      <p id="ppDesc"></p>
+      <a href="#" class="muted small" data-medios>Ver medios de pago</a>
+      <div id="ppTallesWrap" hidden>
+        <label class="field-label">Talle *</label>
+        <div class="chips" id="ppTalles"></div>
+        <p class="err" id="ppTalleErr" hidden>✕ Elegí un talle</p>
+      </div>
+      <div class="pp-buy">
+        <input id="ppQty" type="number" min="1" step="1" value="1" style="width:70px" />
+        <button id="ppAdd" type="button" class="btn primary">Agregar al carrito</button>
+        <button id="ppFav" type="button" class="fav" style="position:static" aria-label="Favorito">♥</button>
+      </div>
+      <p class="err" id="ppStockErr" hidden>✕ Fuera de stock</p>
+      <p class="muted small" id="ppStock"></p>
+    </div>
+  </div>
+</section>
+
+<section id="catpage" class="container" hidden>
+  <p class="crumbs"><a href="#inicio">Inicio</a> / <span id="crumbCat"></span><span id="crumbSubWrap" hidden> / <span id="crumbSub"></span></span></p>
+  <h2 id="catTitle"></h2>
+  <p class="muted" id="catDesc"></p>
+  <div id="catSubs" class="chips" style="margin:8px 0"></div>
+  <p class="muted small" id="catCount"></p>
 </section>
 
 <section id="productos" class="container">
@@ -85,14 +146,21 @@
   <p id="emptyMsg" class="empty" hidden>No se encontraron productos.</p>
 </section>
 
+<section id="memberBanner" class="container">
+  <a href="#/miembros" class="member-banner">
+    <div><p class="eyebrow light">ACACIA</p><h2 id="tMembTitle">Hacete Miembro</h2></div>
+    <p class="perks" id="tMembPerks">ACCESO ANTICIPADO A LANZAMIENTOS<br />ENVÍO GRATIS · DESCUENTO DE CUMPLEAÑOS</p>
+  </a>
+</section>
+
 <section id="contacto" class="container contact">
-  <h2>Contacto</h2>
-  <p>Escribinos por WhatsApp para consultas de talles, stock y envíos.</p>
+  <h2 id="tContTitle">Contacto</h2>
+  <p id="tContSub">Escribinos por WhatsApp para consultas de talles, stock y envíos.</p>
   <div class="contact-grid">
     <div>
       <p><strong>WhatsApp:</strong> <span id="waNumberText">+542645874999 y 2645063736</span></p>
-      <p><strong>Email:</strong> acaciaindumentaria.sj@gmail.com</p>
-       <p><strong>Instagram</strong> acaciaindumentaria.sj</p>
+      <p><strong>Email:</strong> <span id="tContEmail">acaciaindumentaria.sj@gmail.com</span></p>
+       <p><strong>Instagram</strong> <span id="tContInsta">acaciaindumentaria.sj</span></p>
     </div>
     <form id="contactForm" autocomplete="on">
       <input required placeholder="Tu nombre" id="cName" name="name" autocomplete="name" />
@@ -100,6 +168,29 @@
       <textarea required placeholder="Mensaje" id="cMsg" rows="3"></textarea>
       <button class="btn primary" type="submit">Enviar por WhatsApp</button>
     </form>
+  </div>
+</section>
+
+<section id="cuenta" class="container" hidden>
+  <div id="cuentaLogin" class="pago-card" hidden>
+    <h3>Entrá para ver tu cuenta</h3>
+    <button class="btn primary" type="button" onclick="openAuthModal()">Registrate / Login</button>
+  </div>
+  <div id="cuentaBody" hidden>
+    <div class="cuenta-head">
+      <div class="avatar" id="cuAvatar">?</div>
+      <div><h2 id="cuName"></h2><p class="muted" id="cuSince"></p></div>
+    </div>
+    <div class="cuenta-tabs">
+      <button type="button" data-ctab="perfil">Perfil</button>
+      <button type="button" data-ctab="ordenes">Órdenes</button>
+      <button type="button" data-ctab="favoritos">Favoritos</button>
+      <button type="button" data-ctab="ajustes">Ajustes</button>
+    </div>
+    <div class="cuenta-layout">
+      <aside id="cuentaSide"></aside>
+      <div id="cuentaMain"></div>
+    </div>
   </div>
 </section>
 
@@ -117,20 +208,38 @@
     </div>
     <button type="button" id="logoutBtn" class="btn ghost">Cerrar sesión</button>
   </div>
+  <h3>Preguntas sobre la membresía</h3>
+  <details class="faq" open>
+    <summary>¿Qué es la membresía de Acacia?</summary>
+    <p>La membresía de Acacia es acceso a lo mejor de Acacia: promos y descuentos exclusivos, puntos por cada compra y cupones solo para miembros. Unirse es fácil y gratis. <a href="#" data-open-auth>Registrate</a></p>
+  </details>
+  <details class="faq">
+    <summary>¿Cómo hago para hacerme miembro?</summary>
+    <p>Para hacerte miembro de Acacia y disfrutar todos los beneficios que tenemos para vos, podés registrarte <a href="#" data-open-auth>acá</a>. Solo necesitás nombre, email y una contraseña.</p>
+  </details>
+  <details class="faq">
+    <summary>¿La membresía de Acacia es gratis?</summary>
+    <p>¡Totalmente gratuita! Los miembros disfrutan de todos los beneficios sin ningún costo.</p>
+  </details>
 </section>
 
 <section id="admin" class="container pagos" hidden>
-  <h2>Administración</h2>
+  <h2 style="text-align:center">Administración</h2>
   <div id="adminDash">
-    <div class="pay-tabs" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+   <div class="adm-layout">
+    <aside class="adm-side">
       <button type="button" class="btn ghost" data-atab="resumen">Resumen</button>
       <button type="button" class="btn ghost" data-atab="prods">Productos</button>
       <button type="button" class="btn ghost" data-atab="peds">Compras</button>
       <button type="button" class="btn ghost" data-atab="users">Usuarios</button>
       <button type="button" class="btn ghost" data-atab="cupones">Cupones</button>
+      <button type="button" class="btn ghost" data-atab="inicio">Editar inicio</button>
+      <button type="button" class="btn ghost" data-atab="contacto">Editar contacto</button>
+      <button type="button" class="btn ghost" data-atab="menu">Editar menú</button>
       <button type="button" class="btn ghost" id="admExit">Salir</button>
-    </div>
-    <button type="button" id="admLogoutBtn" class="btn primary" style="margin-bottom:10px">Cerrar sesión</button>
+      <button type="button" id="admLogoutBtn" class="btn primary">Cerrar sesión</button>
+    </aside>
+    <div class="adm-main">
     <div id="atab-resumen">
       <div class="pagos-grid">
         <div class="pago-card"><h3>👥 <span id="stUsers">0</span></h3><p class="muted small">usuarios unidos</p></div>
@@ -152,6 +261,7 @@
           <div class="row2"><label>Nombre (lo que ve el cliente)<input id="npNombre" placeholder="Remera Venus" /></label><label>ID automático (código interno)<input id="npId" placeholder="se genera solo" readonly style="background:#f3ece3" /></label></div>
           <div class="row2"><label>Precio<input id="npPrecio" type="number" min="0" step="100" placeholder="15900" /></label><label>Stock<input id="npStock" type="number" min="0" step="1" placeholder="4" /></label></div>
           <div class="row2"><label>Categoría<select id="npCat"><option value="mujer">Mujer</option><option value="hombre">Hombre</option></select></label><label>Colores<div class="chips" id="npChips"></div><div style="display:flex;gap:6px"><input id="npColorIn" placeholder="marrón" /><button type="button" id="npColorAdd" class="btn ghost">+</button></div></label></div>
+          <label>Talles (los que el cliente puede elegir)<div class="chips" id="npTalles"></div><div style="display:flex;gap:6px"><input id="npTalleIn" placeholder="ej 40" /><button type="button" id="npTalleAdd" class="btn ghost">+</button></div></label>
           <label>URL foto<input id="npImg" placeholder="https://... (o subí un archivo)" /></label>
           <label>Descripción<input id="npDesc" placeholder="Descripción" /></label>
           <button type="button" id="npSave" class="btn primary">Guardar producto</button>
@@ -180,6 +290,34 @@
       <h4>Cupones activos</h4><div id="cpActive" class="cuotas"></div>
       <h4>Cupones inactivos / usados</h4><div id="cpInactive" class="cuotas"></div>
     </div>
+    <div id="atab-inicio" hidden>
+      <div class="pago-card">
+        <h3>Editar página principal</h3>
+        <p class="muted small">Se muestra lo actual para editarlo. Guardar lo publica en la tienda.</p>
+        <div id="editInicioFields"></div>
+        <button type="button" id="saveInicio" class="btn primary">Guardar inicio</button>
+        <p id="saveInicioMsg" class="muted small"></p>
+      </div>
+    </div>
+    <div id="atab-contacto" hidden>
+      <div class="pago-card">
+        <h3>Editar contacto</h3>
+        <p class="muted small">Se muestra lo actual para editarlo (los números de WhatsApp se cambian en el código, no acá).</p>
+        <div id="editContactoFields"></div>
+        <button type="button" id="saveContacto" class="btn primary">Guardar contacto</button>
+        <p id="saveContactoMsg" class="muted small"></p>
+      </div>
+    </div>
+    <div id="atab-menu" hidden>
+      <div class="pago-card">
+        <h3>Editar barra lateral y menú</h3>
+        <p class="muted small">Apartados de arriba, secciones Mujer/Hombre y sus apartados (agregar o eliminar).</p>
+        <div id="menuEditor"></div>
+        <button type="button" id="saveMenu" class="btn primary">Guardar menú</button>
+        <p id="saveMenuMsg" class="muted small"></p>
+      </div>
+    </div>
+   </div>
   </div>
 </section>
 
@@ -217,7 +355,7 @@
 <footer class="footer">
   <div class="container footer-inner">
     <div>ACACIA indumentaria © 2026</div>
-    <div><a href="#inicio">Inicio</a> · <a href="#productos">Productos</a> · <a href="#contacto">Contacto</a></div>
+    <div><a href="#inicio">Inicio</a> · <a href="#productos">Productos</a> · <a href="#/contacto">Contacto</a> · <a href="#" data-terms="terms">Términos</a> · <a href="#" data-terms="priv">Privacidad</a></div>
   </div>
 </footer>
 
@@ -334,13 +472,11 @@
               </div>
               <label class="field-label">Cuotas:</label>
               <div id="cuotasCard" class="cuotas"></div>
-              <label class="field-label">Datos de la tarjeta (obligatorio):</label>
+              <label class="field-label">Datos para coordinar el pago (obligatorio, acá no se debita nada):</label>
               <div class="field" id="w-cardName"><input id="cardName" name="cc-name" autocomplete="cc-name" placeholder="Nombre del titular *" /><span class="err" hidden>✕ Completá el titular</span></div>
-              <div class="field" id="w-cardNumber"><input id="cardNumber" name="cc-number" autocomplete="cc-number" placeholder="Número de tarjeta *" inputmode="numeric" maxlength="19" /><span class="err" hidden>✕ Número 15-16 dígitos</span></div>
-              <div class="row2"><div class="field" id="w-cardExp"><input id="cardExp" name="cc-exp" autocomplete="cc-exp" placeholder="Vencimiento MM/AA *" maxlength="5" /><span class="err" hidden>✕ MM/AA</span></div><div class="field" id="w-cardCvv"><input id="cardCvv" name="cc-csc" autocomplete="cc-csc" placeholder="Código CVV *" maxlength="4" inputmode="numeric" /><span class="err" hidden>✕ CVV</span></div></div>
               <div class="row2"><div class="field" id="w-cardDni"><input id="cardDni" placeholder="DNI del pagador *" inputmode="numeric" maxlength="8" /><span class="err" hidden>✕ DNI 7-8 dígitos</span></div><div class="field" id="w-cardEmail"><input id="cardEmail" type="email" autocomplete="email" placeholder="Email *" /><span class="err" hidden>✕ Email válido</span></div></div>
               <div class="field" id="w-cardBill"><input id="cardBill" placeholder="Dirección de factura *" autocomplete="street-address" /><span class="err" hidden>✕ Dirección de factura</span></div>
-              <p class="muted small">🔒 No guardamos tu tarjeta.</p>
+              <p class="muted small">🔒 El pago con tarjeta se coordina por WhatsApp con link de pago. Acá no se cobra ni se guardan datos de tarjetas.</p>
             </div>
           </div>
 
@@ -361,13 +497,11 @@
           <div class="acc-item">
             <button type="button" class="acc-head" data-acc="debit">Tarjeta de débito <span>∨</span></button>
             <div class="acc-body" id="acc-debit" hidden>
-              <label class="field-label">Débito (1 pago):</label>
+              <label class="field-label">Débito (1 pago) — datos para coordinar (acá no se debita nada):</label>
               <div class="field" id="w-dbName"><input id="dbName" placeholder="Nombre del titular *" autocomplete="cc-name" /><span class="err" hidden>✕ Completá el titular</span></div>
-              <div class="field" id="w-dbNumber"><input id="dbNumber" placeholder="Número de tarjeta *" inputmode="numeric" maxlength="19" autocomplete="cc-number" /><span class="err" hidden>✕ Número 15-16 dígitos</span></div>
-              <div class="row2"><div class="field" id="w-dbExp"><input id="dbExp" placeholder="MM/AA *" maxlength="5" /><span class="err" hidden>✕ MM/AA</span></div><div class="field" id="w-dbCvv"><input id="dbCvv" placeholder="CVV *" maxlength="4" inputmode="numeric" /><span class="err" hidden>✕ CVV</span></div></div>
               <div class="row2"><div class="field" id="w-dbDni"><input id="dbDni" placeholder="DNI del pagador *" inputmode="numeric" maxlength="8" /><span class="err" hidden>✕ DNI</span></div><div class="field" id="w-dbEmail"><input id="dbEmail" type="email" placeholder="Email *" /><span class="err" hidden>✕ Email</span></div></div>
               <div class="field" id="w-dbBill"><input id="dbBill" placeholder="Dirección de factura *" /><span class="err" hidden>✕ Dirección</span></div>
-              <p class="muted small">🔒 No guardamos tu tarjeta.</p>
+              <p class="muted small">🔒 El pago se coordina por WhatsApp.</p>
             </div>
           </div>
 
@@ -450,7 +584,7 @@
         <div class="field" id="w-rPass"><div class="pass-wrap"><input id="rPass" name="new-password" type="password" autocomplete="new-password" placeholder="Contraseña * (mín 6)" /><button type="button" class="eye" data-eye="rPass" aria-label="Ver contraseña">👁</button></div><span class="err" hidden>✕ Mín 6</span></div>
         <div class="field" id="w-rPass2"><div class="pass-wrap"><input id="rPass2" type="password" autocomplete="new-password" placeholder="Repetir *" /><button type="button" class="eye" data-eye="rPass2" aria-label="Ver contraseña">👁</button></div><span class="err" hidden>✕ No coincide</span></div>
       </div>
-      <label class="muted small" style="display:flex;gap:8px;margin:8px 0"><input type="checkbox" id="rTerms" style="width:auto" /> Acepto la Política de privacidad y Términos de Acacia.</label>
+      <label class="muted small" style="display:flex;gap:8px;margin:8px 0"><input type="checkbox" id="rTerms" style="width:auto" /> <span>Acepto la <a href="#" data-terms="priv">Política de privacidad</a> y <a href="#" data-terms="terms">Términos de uso</a> de Acacia.</span></label>
       <button type="submit" class="btn primary full">Crear mi cuenta</button>
       <p id="regMsg" class="muted small"></p>
     </form>
@@ -460,6 +594,19 @@
       <div class="field" id="w-lPass"><div class="pass-wrap"><input id="lPass" type="password" placeholder="Contraseña *" autocomplete="current-password" /><button type="button" class="eye" data-eye="lPass" aria-label="Ver contraseña">👁</button></div><span class="err" hidden>✕</span></div>
       <button type="submit" class="btn primary full">Entrar</button>
       <p><a href="#" id="forgotLink" class="muted small">¿Olvidaste tu contraseña?</a></p>
+      <p class="muted small" style="text-align:center">— o —</p>
+      <div id="socialBtns" style="display:flex;flex-direction:column;gap:8px">
+        <div id="googleBtn"></div>
+        <button type="button" id="googleBtnCustom" class="btn ghost full" style="display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg> Continuar con Google</button>
+        <button type="button" id="fbBtn" class="btn ghost full" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1877F2;border-color:#1877F2;color:#fff"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M13.5 22v-8h2.7l.4-3.2h-3.1V8.7c0-.9.3-1.6 1.7-1.6h1.5V4.2c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.7H7.8V14h2.7v8h3z"/></svg> Continuar con Facebook</button>
+        <button type="button" id="codeBtn" class="btn ghost full">Entrar con código por email</button>
+      </div>
+      <div id="codeBox" hidden>
+        <div class="field" id="w-cEmail"><input id="cLoginEmail" type="email" autocomplete="email" placeholder="Tu email *" /><span class="err" hidden>✕ Email válido</span></div>
+        <button type="button" id="cSend" class="btn ghost full">Enviarme el código</button>
+        <div class="field" id="w-cCode"><input id="cLoginCode" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos *" /><span class="err" hidden>✕ Código</span></div>
+        <button type="button" id="cEnter" class="btn primary full">Entrar</button>
+      </div>
       <p id="loginMsg" class="muted small"></p>
     </form>
     <form id="forgotForm" hidden>
@@ -476,6 +623,39 @@
   </div>
 </div>
 
-<script src="app.js?v=48"></script>
+<div id="termsModal" class="modal" hidden>
+  <div class="modal-box wide" style="text-align:left">
+    <button id="closeTerms" type="button">✕</button>
+    <div class="pay-tabs" style="display:flex;gap:8px;margin:8px 0 12px">
+      <button type="button" id="tabTerms" class="btn primary" style="flex:1">Términos de uso</button>
+      <button type="button" id="tabPriv" class="btn ghost" style="flex:1">Privacidad</button>
+    </div>
+    <div id="termsBody" style="max-height:55vh;overflow:auto;font-size:.92rem;line-height:1.6">
+      <div id="terms-terms">
+        <h3>Términos de uso — Acacia Indumentaria</h3>
+        <p><strong>1. La tienda.</strong> Acacia Indumentaria vende indumentaria online en Argentina. Al comprar o crear una cuenta aceptás estos términos.</p>
+        <p><strong>2. Productos y precios.</strong> Las fotos son ilustrativas. Los precios están en pesos argentinos e incluyen impuestos. Podemos actualizar precios y stock sin aviso; tu pedido se respeta al precio confirmado por WhatsApp.</p>
+        <p><strong>3. Compra y pago.</strong> El pedido se confirma por WhatsApp. Pagás por transferencia al alias/CBU informado, tarjeta o efectivo según lo coordinado. El pedido se prepara al acreditarse el pago y enviarse el comprobante.</p>
+        <p><strong>4. Envíos.</strong> Enviamos a toda la provincia y el país. Los plazos se coordinan por WhatsApp y deben respetarse.</p>
+        <p><strong>5. Cambios.</strong> Cambios de talle dentro de los 15 días de recibido, con etiquetas y sin uso. Escribinos por WhatsApp para coordinar.</p>
+        <p><strong>6. Arrepentimiento.</strong> Tenés 10 días corridos desde que recibís el producto para cancelar la compra y pedir la devolución del dinero (art. 34, Ley 24.240). Escribinos por WhatsApp con tu número de pedido.</p>
+        <p><strong>7. Promos, cupones y puntos.</strong> Los cupones tienen vigencia y condiciones propias y no son acumulables salvo que se indique. Los puntos (1 cada $1.000) no tienen valor monetario directo.</p>
+        <p><strong>8. Tu cuenta.</strong> Sos responsable de tu usuario y contraseña. Guardamos tu contraseña cifrada: nunca la compartas ni la pidas por WhatsApp.</p>
+        <p><strong>9. Contacto.</strong> WhatsApp +549 264 587 4999 / +549 264 506 3736 · acaciaindumentaria.sj@gmail.com</p>
+      </div>
+      <div id="terms-priv" hidden>
+        <h3>Política de privacidad — Acacia Indumentaria (Ley 25.326)</h3>
+        <p><strong>1. Qué datos pedimos.</strong> Nombre, DNI, teléfono, email, dirección de entrega y datos de tu compra. Los datos de tarjeta solo se usan para validar el pago y no se guardan.</p>
+        <p><strong>2. Para qué los usamos.</strong> Procesar pedidos, envíos, promociones, puntos y cupones de miembros, y atención por WhatsApp.</p>
+        <p><strong>3. Con quién los compartimos.</strong> Solo con quienes hacen falta para operar (correo/envíos y medios de pago). No vendemos tus datos.</p>
+        <p><strong>4. Tus derechos.</strong> Podés pedir acceso, rectificación, actualización o supresión de tus datos escribiendo a acaciaindumentaria.sj@gmail.com.</p>
+        <p><strong>5. Seguridad.</strong> Las contraseñas se guardan cifradas (hash) y nunca se muestran. En tu dispositivo guardamos carrito y preferencias solo si lo aceptás.</p>
+      </div>
+    </div>
+    <button id="acceptTerms" type="button" class="btn primary full">Leí y acepto</button>
+  </div>
+</div>
+
+<script src="app.js?v=59"></script>
 </body>
 </html>

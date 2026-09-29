@@ -5,6 +5,9 @@ const BACKEND_ENABLED = true;
 const AUTH_URL_LOCAL = "http://localhost:3001";
 const AUTH_URL_PROD = "https://acacia-production-0a93.up.railway.app";
 const AUTH_URL = (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:") ? AUTH_URL_LOCAL : AUTH_URL_PROD;
+// Login social: pegá tus IDs cuando los crees (Google Cloud / Meta). Vacío = botón oculto.
+const GOOGLE_CLIENT_ID = "805401039379-bc2u2lcdmulibiec71jfedd0apqtdchr.apps.googleusercontent.com";
+const FB_APP_ID = "2508902876263794";
 // NARANJA X - datos reales
 const NX_ALIAS = "acacia.2026";
 const NX_CBU = "4530000800011641761230";
@@ -59,7 +62,8 @@ const PRODUCTS0 = [
     category: "mujer",
     color: "Beige",
     img: "https://dcdn-us.mitiendanube.com/stores/008/201/704/products/1000405382-16a7959d2f2435a85117892384089343-480-0.webp",
-    desc: "Pollera tiare. Envío gratis."
+    desc: "Pollera tiare. Envío gratis.",
+    talles: ["S", "M", "L"]
   },
   {
     id: "vestido-helecho",
@@ -68,7 +72,8 @@ const PRODUCTS0 = [
     category: "mujer",
     color: "Marrón",
     img: "https://dcdn-us.mitiendanube.com/stores/008/201/704/products/1000393704-d052442b0ddbbbf42e17887202792111-480-0.webp",
-    desc: "Vestido helecho. Envío gratis."
+    desc: "Vestido helecho. Envío gratis.",
+    talles: ["S", "M", "L"]
   },
   {
     id: "musculosa-azalea",
@@ -77,7 +82,8 @@ const PRODUCTS0 = [
     category: "mujer",
     color: "Negro",
     img: "https://dcdn-us.mitiendanube.com/stores/008/201/704/products/1000395703-95f4f1dbec47d2dc0517887028203195-480-0.webp",
-    desc: "Microfibra Lycra. Talle 2: 36x53 / Talle 3: 38x59 / Talle 4: 43x67"
+    desc: "Microfibra Lycra. Talle 2: 36x53 / Talle 3: 38x59 / Talle 4: 43x67",
+    talles: ["2", "3", "4"]
   },
   { id: "remera-basica-h", name: "Remera básica Hombre", price: 15990, category: "hombre", color: "Blanco", img: "", desc: "Producto de ejemplo - reemplazá foto y precio." },
   { id: "buzo-hombre", name: "Buzo Hombre", price: 29990, category: "hombre", color: "Negro", img: "", desc: "Producto de ejemplo - reemplazá foto y precio." },
@@ -89,7 +95,7 @@ async function syncProducts(){
     const r = await fetch(AUTH_URL+"/api/productos");
     const d = await r.json();
     if(r.ok && d.productos?.length){
-      PRODUCTS = d.productos.map(p=>({ id:p.id, name:p.nombre, price:Number(p.precio), category:p.categoria||"mujer", color:p.color||"", img:p.img||"", desc:p.descrip||"", stock:p.stock }));
+      PRODUCTS = d.productos.map(p=>({ id:p.id, name:p.nombre, price:Number(p.precio), category:p.categoria||"mujer", color:p.color||"", img:p.img||"", fotos:p.fotos||(p.img?[p.img]:[]), desc:p.descrip||"", stock:p.stock, talles:String(p.talles||"").split(",").map(s=>s.trim()).filter(Boolean) }));
       render();
       heroShow(0);
     }
@@ -153,7 +159,7 @@ function heroAuto(){
   if(nx) nx.onclick = ()=>{ heroShow(heroIdx+1); heroAuto(); };
   if(im) im.onclick = ()=>{
     const list = PRODUCTS.filter(p=>p.img);
-    if(list[heroIdx]) openModal(list[heroIdx].id);
+    if(list[heroIdx]) location.hash = "#/producto/" + list[heroIdx].id;
   };
 })();
 
@@ -165,8 +171,12 @@ function render(){
     const el = document.createElement("article");
     el.className = "card";
     const c3 = p.price/3;
-    const st = (p.stock ?? 10) <= 0 ? "Sin stock" : `Stock: ${p.stock ?? 10}`;
+    const stock = p.stock ?? 10;
+    const out = stock <= 0;
+    const st = out ? `<span style="color:#c00;font-weight:700">Fuera de stock</span>` : `Stock: ${stock}`;
+    const hasTalles = (p.talles || []).length > 0;
     el.innerHTML = `
+      <button type="button" class="fav${isFav(p.id) ? " on" : ""}" data-fav="${p.id}" aria-label="Favorito">♥</button>
       <img src="${p.img || placeholderImg(p.name)}" alt="${p.name}" data-view="${p.id}" loading="lazy" />
       <div class="card-body">
         <h3>${p.name}</h3>
@@ -174,17 +184,24 @@ function render(){
         <div class="price">${fmt(p.price)}</div>
         <div class="muted small">Hasta <strong>3 sin interés</strong> de ${fmt(c3)} con Plan Z</div>
         <a href="#" class="muted small" data-medios>Ver medios de pago</a>
-        <button class="btn primary" data-add="${p.id}">Agregar</button>
+        ${out ? `<button class="btn ghost" disabled>Fuera de stock</button>`
+              : hasTalles ? `<button class="btn primary" data-goto="${p.id}">Elegir talle</button>`
+              : `<button class="btn primary" data-add="${p.id}">Agregar</button>`}
       </div>`;
     grid.appendChild(el);
   });
 }
 
 function saveCart(){ localStorage.setItem("acacia_cart", JSON.stringify(cart)); updateCartUI(); }
-function addToCart(id){
-  const f = cart.find(i=>i.id===id);
+function cartKey(id, talle){ return id + "|" + (talle || ""); }
+function addToCartSilent(id, talle){
+  const k = cartKey(id, talle);
+  const f = cart.find(i=>cartKey(i.id, i.talle)===k);
   if(f) f.qty++;
-  else cart.push({id, qty:1});
+  else cart.push({id, talle: talle || "", qty:1});
+}
+function addToCart(id, talle){
+  addToCartSilent(id, talle);
   saveCart();
   openCart();
 }
@@ -198,13 +215,14 @@ function updateCartUI(){
     const p = PRODUCTS.find(x=>x.id===item.id);
     if(!p) return;
     total += p.price * item.qty;
+    const k = cartKey(item.id, item.talle);
     const div = document.createElement("div");
     div.className = "cart-item";
     div.innerHTML = `
       <img src="${p.img || placeholderImg(p.name)}" />
-      <div style="flex:1"><strong>${p.name}</strong><br><span class="muted">${fmt(p.price)}</span>
-      <div class="qty"><button data-dec="${p.id}">-</button> ${item.qty} <button data-inc="${p.id}">+</button></div></div>
-      <button data-del="${p.id}">🗑</button>`;
+      <div style="flex:1"><strong>${p.name}</strong>${item.talle ? `<br><span class="muted">Talle ${item.talle}</span>` : ""}<br><span class="muted">${fmt(p.price)}</span>
+      <div class="qty"><button data-dec="${k}">-</button> ${item.qty} <button data-inc="${k}">+</button></div></div>
+      <button data-del="${k}">🗑</button>`;
     box.appendChild(div);
   });
   document.getElementById("cartTotal").textContent = fmt(total);
@@ -217,7 +235,7 @@ function buildOrderLines(payMethod){
   cart.forEach(i=>{
     const p = PRODUCTS.find(x=>x.id===i.id);
     if(!p) return;
-    lines.push("- " + p.name + " x" + i.qty + " - " + fmt(p.price*i.qty));
+    lines.push("- " + p.name + (i.talle ? " (talle " + i.talle + ")" : "") + " x" + i.qty + " - " + fmt(p.price*i.qty));
   });
   lines.push("");
   lines.push("Total: " + fmt(getTotal()));
@@ -234,17 +252,41 @@ function cartToWhatsApp(payMethod){
 
 // events
 document.addEventListener("click", e=>{
+  const oa = e.target.closest("[data-open-auth]");
+  if(oa){ e.preventDefault(); openAuthModal(); }
+  const fav = e.target.closest("[data-fav]");
+  if(fav){ e.preventDefault(); toggleFav(fav.dataset.fav); return; }
+  const go = e.target.closest("[data-goto]");
+  if(go){ location.hash = "#/producto/" + go.dataset.goto; return; }
   const add = e.target.closest("[data-add]");
-  if(add) { e.preventDefault(); addToCart(add.dataset.add); }
+  if(add) {
+    e.preventDefault();
+    const p = PRODUCTS.find(x=>x.id===add.dataset.add);
+    const inCart = cart.filter(i=>i.id===add.dataset.add).reduce((a,c)=>a+c.qty,0);
+    if(p && inCart >= (p.stock ?? 99)){ alert("Fuera de stock: máximo " + (p.stock ?? 0)); return; }
+    addToCart(add.dataset.add);
+  }
   const med = e.target.closest("[data-medios]");
   if(med){ e.preventDefault(); updateSummary(); document.getElementById("mediosModal").hidden=false; }
   const view = e.target.closest("[data-view]");
-  if(view) openModal(view.dataset.view);
-  if(e.target.closest("[data-inc]")){ cart.find(i=>i.id===e.target.closest("[data-inc]").dataset.inc).qty++; saveCart(); }
-  if(e.target.closest("[data-dec]")){ const id=e.target.closest("[data-dec]").dataset.dec; const it=cart.find(i=>i.id===id); it.qty--; if(it.qty<=0) cart=cart.filter(i=>i.id!==id); saveCart(); }
-  if(e.target.closest("[data-del]")){ cart=cart.filter(i=>i.id!==e.target.closest("[data-del]").dataset.del); saveCart(); }
+  if(view){ location.hash = "#/producto/" + view.dataset.view; }
+  if(e.target.closest("[data-inc]")){ const k=e.target.closest("[data-inc]").dataset.inc; const it=cart.find(i=>cartKey(i.id,i.talle)===k); const p=PRODUCTS.find(x=>x.id===it?.id); const max=p?.stock ?? 99; if(it && it.qty < max) it.qty++; saveCart(); }
+  if(e.target.closest("[data-dec]")){ const k=e.target.closest("[data-dec]").dataset.dec; const it=cart.find(i=>cartKey(i.id,i.talle)===k); if(it){ it.qty--; if(it.qty<=0) cart=cart.filter(i=>cartKey(i.id,i.talle)!==k); } saveCart(); }
+  if(e.target.closest("[data-del]")){ const k=e.target.closest("[data-del]").dataset.del; cart=cart.filter(i=>cartKey(i.id,i.talle)!==k); saveCart(); }
   const catLink = e.target.closest("[data-cat-link]");
-  if(catLink){ categoryFilter.value = catLink.dataset.catLink; render(); }
+  if(catLink){
+    e.preventDefault();
+    const c = catLink.dataset.catLink;
+    if(c === "todos"){ location.hash = "#productos"; document.getElementById("catpage").hidden = true; categoryFilter.value = "todos"; searchInput.value = ""; render(); }
+    else if(location.hash === "#/" + c) applyRoute(true);
+    else location.hash = "#/" + c;
+  }
+  const homeLink = e.target.closest('a[href="#inicio"]');
+  if(homeLink){
+    document.getElementById("catpage").hidden = true;
+    categoryFilter.value = "todos"; searchInput.value = ""; sortFilter.value = "relevancia";
+    render();
+  }
 });
 [searchInput, categoryFilter, sortFilter].forEach(el=>el.addEventListener("input", render));
 
@@ -257,7 +299,227 @@ document.getElementById("closeCart").onclick = closeCartFn;
 overlay.onclick = closeCartFn;
 document.getElementById("checkoutBtn").onclick = ()=>{ if(cart.length===0){ alert("El carrito está vacío"); return; } closeCartFn(); openCheckout(); };
 document.getElementById("clearBtn").onclick = ()=>{ cart=[]; saveCart(); };
-document.getElementById("menuBtn").onclick = ()=>document.getElementById("nav").classList.toggle("open");
+const sideMenu = document.getElementById("sideMenu");
+const menuOverlay = document.getElementById("menuOverlay");
+function openMenu(){ sideMenu.classList.add("open"); menuOverlay.hidden = false; sideMenu.setAttribute("aria-hidden","false"); }
+function closeMenu(){ sideMenu.classList.remove("open"); menuOverlay.hidden = true; sideMenu.setAttribute("aria-hidden","true"); }
+document.getElementById("menuBtn").onclick = openMenu;
+document.getElementById("closeMenu").onclick = closeMenu;
+menuOverlay.onclick = closeMenu;
+sideMenu.addEventListener("click", e=>{ if(e.target.closest("a")) closeMenu(); });
+// ===== MENÚ lateral y mega (editable desde Admin > Menú) =====
+const SUBS = {
+  mujer: ["Polleras", "Vestidos", "Musculosas", "Accesorios"],
+  hombre: ["Remeras", "Shorts", "Buzos", "Accesorios"]
+};
+const SUB_Q = { Polleras: "pollera", Vestidos: "vestido", Musculosas: "musculosa", Remeras: "remera", Shorts: "short", Buzos: "buzo", Accesorios: "accesorio" };
+function defaultMenu(){
+  const S = cat=>[
+    { label: "Ofertas", href: `#/${cat}/ofertas`, q: "", hl: true },
+    ...SUBS[cat].map(s=>({ label: s, href: `#/${cat}/${SUB_Q[s]}`, q: SUB_Q[s] })),
+    { label: "Ver todo", href: `#/${cat}`, q: "", all: true }
+  ];
+  return {
+    top: [
+      { label: "Inicio", href: "#inicio" },
+      { label: "Productos", menu: true },
+      { label: "Miembros", href: "#/miembros" },
+      { label: "Contacto", href: "#/contacto" }
+    ],
+    cats: {
+      mujer: { label: "Mujer", desc: "Polleras, vestidos, musculosas y accesorios.", subs: S("mujer") },
+      hombre: { label: "Hombre", desc: "Remeras, shorts, buzos y accesorios.", subs: S("hombre") }
+    }
+  };
+}
+let MENU = defaultMenu();
+async function loadMenu(){
+  try {
+    const r = await fetch(AUTH_URL+"/api/ajustes");
+    const d = await r.json();
+    if(r.ok && d.ajustes.menu) MENU = JSON.parse(d.ajustes.menu);
+  } catch {}
+  renderMenus();
+}
+function renderMenus(){
+  const nav = document.getElementById("sideNav");
+  nav.innerHTML = MENU.top.map(t=>t.menu
+    ? `<button type="button" id="prodToggle">Productos <span>›</span></button><div id="prodSub" hidden>` +
+      Object.entries(MENU.cats).map(([key,c])=>`<button type="button" data-cat="${key}">${c.label} <span>›</span></button>`).join("") +
+      `</div><div id="prodList" hidden><strong id="prodListTitle"></strong><span class="sub-items"></span></div>`
+    : `<a href="${t.href}">${t.label}</a>`).join("");
+  document.getElementById("megaMenu").innerHTML = Object.entries(MENU.cats)
+    .map(([key,c])=>`<div><strong><a href="#/${key}" style="color:#111">${c.label}</a></strong>` + (c.subs||[]).map(s=>`<a href="${s.href}"${s.hl?' class="hl"':""}>${s.all?"<strong>"+s.label+"</strong>":s.label}</a>`).join("") + `</div>`).join("");
+  document.getElementById("prodToggle").onclick = ()=>{
+    document.getElementById("prodSub").hidden = !document.getElementById("prodSub").hidden;
+    document.getElementById("prodList").hidden = true;
+  };
+  nav.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{
+    const cat = b.dataset.cat;
+    if(location.hash === "#/" + cat) applyRoute(true);
+    else location.hash = "#/" + cat;
+  });
+}
+function findSub(hash){
+  for(const [key,c] of Object.entries(MENU.cats)){
+    const s = (c.subs||[]).find(x=>x.href === hash);
+    if(s) return { cat: key, sub: s };
+  }
+  return null;
+}
+// Router tipo Nike: cada categoría es una "página" (#/mujer/pollera) con banner y migas
+const CAT_META = {
+  mujer: { title: "Mujer", desc: "Polleras, vestidos, musculosas y accesorios." },
+  hombre: { title: "Hombre", desc: "Remeras, shorts, buzos y accesorios." }
+};
+function parseRoute(){
+  const h = location.hash;
+  let m = h.match(/^#\/(mujer|hombre)(?:\/([a-z]+))?$/);
+  if(m) return { type: "cat", cat: m[1], slug: m[2] || null };
+  m = h.match(/^#\/producto\/([A-Za-z0-9\-_]+)$/);
+  if(m) return { type: "prod", id: m[1] };
+  if(h === "#/contacto") return { type: "page", page: "contacto" };
+  if(h === "#/miembros") return { type: "page", page: "miembros" };
+  if(h === "#/admin") return { type: "page", page: "admin" };
+  let m2 = h.match(/^#\/cuenta(?:\/(perfil|ordenes|favoritos|ajustes))?$/);
+  if(m2) return { type: "cuenta", tab: m2[1] || "perfil" };
+  return null;
+}
+const VIEW_SECTIONS = ["inicio", "shopBanner", "categorias", "productos", "memberBanner", "pagos", "contacto", "miembros", "catpage", "prodpage", "admin", "cuenta"];
+function showView(names){
+  VIEW_SECTIONS.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.hidden = !names.includes(id);
+  });
+}
+function slugToSub(cat, slug){
+  if(!slug) return "todos";
+  if(slug === "ofertas") return "ofertas";
+  return (SUBS[cat] || []).find(s=>SUB_Q[s] === slug) || "todos";
+}
+function applyRoute(scroll){
+  const page = document.getElementById("catpage");
+  const r = parseRoute();
+  if(!r){ page.hidden = true; showView(["inicio", "shopBanner", "categorias", "productos", "memberBanner", "pagos"]); document.title = "Acacia Indumentaria - Tienda Online"; return; }
+  if(r.type === "page"){
+    page.hidden = true;
+    document.getElementById("prodpage").hidden = true;
+    if(r.page === "admin" && !isAdmin()){ location.hash = ""; showView(["inicio", "shopBanner", "categorias", "productos", "memberBanner", "pagos"]); document.title = "Acacia Indumentaria - Tienda Online"; return; }
+    if(r.page === "admin"){ document.getElementById("adminDash").hidden = false; showATab("resumen"); loadStats(); }
+    showView([r.page]);
+    document.title = (r.page === "contacto" ? "Contacto" : r.page === "miembros" ? "Miembros" : "Administración") + " | Acacia Indumentaria";
+    if(scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if(r.type === "cuenta"){
+    page.hidden = true;
+    document.getElementById("prodpage").hidden = true;
+    showView(["cuenta"]);
+    document.title = "Mi cuenta | Acacia Indumentaria";
+    renderCuenta(r.tab || "perfil");
+    if(scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if(r.type === "prod"){
+    page.hidden = true;
+    const p = PRODUCTS.find(x=>x.id === r.id);
+    if(!p){ showView(["inicio", "categorias", "productos", "pagos"]); return; }
+    document.getElementById("ppCrumbCat").textContent = CAT_META[p.category] ? CAT_META[p.category].title : p.category;
+    document.getElementById("ppCrumbCat").href = "#/" + p.category;
+    document.getElementById("ppCrumbName").textContent = p.name;
+    document.getElementById("ppImg").src = p.img || placeholderImg(p.name);
+    document.getElementById("ppImg").alt = p.name;
+    const gal = p.fotos && p.fotos.length ? p.fotos : (p.img ? [p.img] : []);
+    document.getElementById("ppThumbs").innerHTML = gal.map((u,k)=>`<span class="g"><img src="${u}" alt="Foto ${k+1}" style="width:64px;height:64px" onerror="this.style.visibility='hidden'" /></span>`).join("");
+    document.querySelectorAll("#ppThumbs .g").forEach((s,k)=>s.onclick=()=>{ document.getElementById("ppImg").src = gal[k]; });
+    document.getElementById("ppName").textContent = p.name;
+    document.getElementById("ppPrice").textContent = fmt(p.price);
+    document.getElementById("ppCuotas").textContent = "Hasta 3 cuotas sin interés de " + fmt(p.price / 3) + " con Plan Z";
+    document.getElementById("ppMeta").textContent = p.category + (p.color ? " · " + p.color : "");
+    document.getElementById("ppDesc").textContent = p.desc || "";
+    const stock = p.stock ?? 10;
+    const talles = p.talles || [];
+    const tw = document.getElementById("ppTallesWrap");
+    tw.hidden = talles.length === 0;
+    let talleSel = "";
+    if(talles.length){
+      document.getElementById("ppTalles").innerHTML = talles.map(t=>`<span class="chip talle-opt" data-talle="${t}">${t}</span>`).join("");
+      document.querySelectorAll("#ppTalles .talle-opt").forEach(s=>s.onclick=()=>{
+        document.querySelectorAll("#ppTalles .talle-opt").forEach(x=>x.classList.remove("sel"));
+        s.classList.add("sel");
+        talleSel = s.dataset.talle;
+        document.getElementById("ppTalleErr").hidden = true;
+      });
+    }
+    document.getElementById("ppTalleErr").hidden = true;
+    const qtyInput = document.getElementById("ppQty");
+    qtyInput.value = 1;
+    qtyInput.max = stock;
+    const stockErr = document.getElementById("ppStockErr");
+    const addBtn = document.getElementById("ppAdd");
+    if(stock <= 0){
+      document.getElementById("ppStock").textContent = "Stock: 0";
+      stockErr.hidden = false;
+      stockErr.textContent = "✕ Fuera de stock";
+      addBtn.disabled = true;
+    } else {
+      document.getElementById("ppStock").textContent = "Stock: " + stock;
+      stockErr.hidden = true;
+      addBtn.disabled = false;
+    }
+    qtyInput.onchange = ()=>{
+      let q = Math.max(1, Number(qtyInput.value) || 1);
+      if(q > stock){ q = stock; stockErr.hidden = false; stockErr.textContent = "✕ Fuera de stock: máximo " + stock; }
+      else stockErr.hidden = true;
+      qtyInput.value = q;
+    };
+    const ppFav = document.getElementById("ppFav");
+    ppFav.classList.toggle("on", isFav(p.id));
+    ppFav.onclick = ()=>toggleFav(p.id);
+    document.getElementById("ppAdd").onclick = ()=>{
+      if(talles.length && !talleSel){ document.getElementById("ppTalleErr").hidden = false; return; }
+      const q = Math.min(Math.max(1, Number(document.getElementById("ppQty").value) || 1), stock);
+      for(let k = 0; k < q; k++) addToCartSilent(p.id, talleSel);
+      saveCart();
+      openCart();
+    };
+    showView(["prodpage"]);
+    document.title = p.name + " | Acacia Indumentaria";
+    if(scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const found = findSub(location.hash);
+  const cat = found ? found.cat : r.cat;
+  const cfg = MENU.cats[cat] || { label: CAT_META[cat].title, desc: CAT_META[cat].desc, subs: [] };
+  let sub = "todos", q = "", sort = "relevancia", title = null;
+  if(found && !found.sub.all){
+    const isOf = found.sub.href.endsWith("/ofertas");
+    if(isOf){ sub = "ofertas"; sort = "menor"; title = found.sub.label; }
+    else { sub = found.sub.label; q = found.sub.q || ""; title = found.sub.label; }
+  } else if(!found){
+    sub = slugToSub(r.cat, r.slug);
+    q = (sub === "todos" || sub === "ofertas") ? "" : (SUB_Q[sub] || "");
+    sort = sub === "ofertas" ? "menor" : "relevancia";
+    title = sub === "todos" ? null : (sub === "ofertas" ? "Ofertas" : sub);
+  }
+  categoryFilter.value = cat;
+  searchInput.value = q;
+  sortFilter.value = sort;
+  render();
+  const t = found && found.sub.all ? null : title;
+  document.getElementById("crumbCat").textContent = cfg.label;
+  document.getElementById("crumbSubWrap").hidden = !t;
+  if(t) document.getElementById("crumbSub").textContent = t;
+  document.getElementById("catTitle").textContent = t || cfg.label;
+  document.getElementById("catDesc").textContent = cfg.desc || "";
+  document.getElementById("catSubs").innerHTML = (cfg.subs || []).map(s=>`<a class="chip" style="text-decoration:none;color:var(--brand)" href="${s.href}">${s.label}</a>`).join("");
+  document.getElementById("catCount").textContent = document.getElementById("grid").children.length + " productos";
+  page.hidden = false;
+  showView(["catpage", "productos"]);
+  document.title = document.getElementById("catTitle").textContent + " | Acacia Indumentaria";
+  if(scroll) page.scrollIntoView({ behavior: "smooth" });
+}
+window.addEventListener("hashchange", ()=>{ applyRoute(true); closeMenu(); });
 
 // FINANCIACIÓN por banco/tarjeta - refs 2026 (editables, verificar promos vigentes)
 // Interés lo pone el BANCO emisor, no la marca. Marcas: Visa/MC/Amex/Cabal.
@@ -396,7 +658,7 @@ function updateSummary(){
   document.getElementById("ckGrand").textContent = fmt(grand);
   document.getElementById("ckItems").innerHTML = cart.map(i=>{
     const p = PRODUCTS.find(x=>x.id===i.id);
-    return p ? `${p.name} x${i.qty} — ${fmt(p.price*i.qty)}<br>` : "";
+    return p ? `${p.name}${i.talle ? " (talle "+i.talle+")" : ""} x${i.qty} — ${fmt(p.price*i.qty)}<br>` : "";
   }).join("") || "Vacío";
   const cuotaTxt = payTab==="card" ? cuotaCardSel : (payTab==="alias" ? "Alias-CBU" : (payTab==="debit" ? "Débito 1 pago" : "Efectivo"));
   document.getElementById("ckCuotaLine").textContent = cuotaTxt;
@@ -519,33 +781,25 @@ function setErr(base, key, bad){
   if(e) e.hidden = !bad;
 }
 function validCardFull(base){
-  // base: card, nxCard, db. Campos extra: Dni, Email, Bill (factura). Sin alert, con ✕ inline.
+  // base: card, db. Solo datos de contacto/factura (NO se piden ni guardan tarjetas). Sin alert, con ✕ inline.
   clearPayErrs();
   const g = s => (document.getElementById(base+s)?.value || "").trim();
   let firstBad = null;
   const need = (key, ok)=>{ setErr(base==="db"?"db":base, key, !ok); if(!ok && !firstBad) firstBad = (base==="db"?"db":base)+key; return ok; };
-  const cName = g("Name"), cNum = g("Number").replace(/\s/g,""), cExp = g("Exp"), cCvv = g("Cvv");
-  const cDni = (document.getElementById(base==="db"?"dbDni":base==="nxCard"?"nxDni":"cardDni")?.value||"").trim();
-  const cEmail = (document.getElementById(base==="db"?"dbEmail":base==="nxCard"?"nxEmail":"cardEmail")?.value||"").trim();
-  const cBill = (document.getElementById(base==="db"?"dbBill":base==="nxCard"?"nxBill":"cardBill")?.value||"").trim();
+  const cName = g("Name");
+  const cDni = (document.getElementById(base==="db"?"dbDni":"cardDni")?.value||"").trim();
+  const cEmail = (document.getElementById(base==="db"?"dbEmail":"cardEmail")?.value||"").trim();
+  const cBill = (document.getElementById(base==="db"?"dbBill":"cardBill")?.value||"").trim();
   let ok = true;
   const short = base==="db"?"db":base;
   ok = need("Name", cName.length>=3) && ok;
-  ok = need("Number", /^\d{15,16}$/.test(cNum)) && ok;
-  const m = cExp.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
-  let expOk = !!m;
-  if(m){ const yy=2000+parseInt(m[2],10), mm=parseInt(m[1],10); const now=new Date(); if(new Date(yy,mm,0) < new Date(now.getFullYear(),now.getMonth(),1)) expOk=false; }
-  // mapear Exp/Cvv a keys reales
-  setErr(short, "Exp", !expOk); if(!expOk && !firstBad) firstBad = short+"Exp"; ok = ok && expOk;
-  const cvvOk = /^\d{3,4}$/.test(cCvv);
-  setErr(short, "Cvv", !cvvOk); if(!cvvOk && !firstBad) firstBad = short+"Cvv"; ok = ok && cvvOk;
   const dniOk = /^\d{7,8}$/.test(cDni);
   setErr(short, "Dni", !dniOk); if(!dniOk && !firstBad) firstBad = short+"Dni"; ok = ok && dniOk;
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cEmail);
   setErr(short, "Email", !emailOk); if(!emailOk && !firstBad) firstBad = short+"Email"; ok = ok && emailOk;
   const billOk = cBill.length>=5;
   setErr(short, "Bill", !billOk); if(!billOk && !firstBad) firstBad = short+"Bill"; ok = ok && billOk;
-  return {ok, last4: cNum.slice(-4), focus: firstBad, dni: cDni, email: cEmail, bill: cBill};
+  return {ok, last4: "", focus: firstBad, dni: cDni, email: cEmail, bill: cBill};
 }
 function validCard(base){
   // compat vieja: delega a full pero sin DNI extra para no romper
@@ -625,7 +879,7 @@ function doConfirm(){
   const cuotaTxt = payTab==="card" ? (brand+" "+cuotaCardSel) : (payTab==="alias" ? "Alias-CBU acacia.2026" : (payTab==="debit" ? "Débito 1 pago" : "Efectivo"));
   const lines = [
     "NUEVO PEDIDO ACACIA:",
-    ...cart.map(i=>{ const p=PRODUCTS.find(x=>x.id===i.id); return p ? `- ${p.name} x${i.qty} = ${fmt(p.price*i.qty)}` : ""; }),
+    ...cart.map(i=>{ const p=PRODUCTS.find(x=>x.id===i.id); return p ? `- ${p.name}${i.talle ? " (talle "+i.talle+")" : ""} x${i.qty} = ${fmt(p.price*i.qty)}` : ""; }),
     `Subtotal: ${fmt(sub)}`,
     ...(disc>0 ? [`Descuento ${couponCode}: -${fmt(disc)}`] : []),
     `Entrega: ${getShipLabel()} ${fmt(getShipCost())}`,
@@ -640,7 +894,7 @@ function doConfirm(){
   if(!BACKEND_ENABLED) { /* fase 1 estática: solo WhatsApp */ }
   else try {
     const em = memberEmail() || data.email;
-    if(em) fetch(AUTH_URL+"/api/pedido/cerrar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em.toLowerCase(),total:grand,cupon:couponCode,provincia:data.prov||"",items:cart.map(i=>{const p=PRODUCTS.find(x=>x.id===i.id);return p?{id:p.id,n:i.qty,pr:p.price}:null})})}).then(()=>refreshMemberZone()).catch(()=>{});
+    if(em) fetch(AUTH_URL+"/api/pedido/cerrar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em.toLowerCase(),total:grand,cupon:couponCode,provincia:data.prov||"",items:cart.map(i=>{const p=PRODUCTS.find(x=>x.id===i.id);return p?{id:p.id,n:i.qty,t:i.talle||"",pr:p.price}:null})})}).then(()=>refreshMemberZone()).catch(()=>{});
   } catch {}
   // Pantalla gracias + resumen (sin datos sensibles de tarjeta)
   document.getElementById("thanksDetail").innerHTML =
@@ -663,6 +917,145 @@ document.getElementById("keepBuying").onclick = ()=>{
   document.getElementById("overlay").hidden = true;
   document.getElementById("checkoutModal").hidden = true;
   document.getElementById("productos")?.scrollIntoView({behavior:"smooth"});
+};
+// Textos editables del sitio (principal + contacto). Se aplican al cargar.
+const TEXTOS_INICIO = [
+  ["topbar", "Cartel superior", "tTopbar", "topbar"],
+  ["heroEyebrow", "Ojo (arriba del título)", "tHeroEyebrow", "eyebrow"],
+  ["heroTitle", "Título principal", "tHeroTitle", "title"],
+  ["heroSub", "Subtítulo", "tHeroSub", "sub"],
+  ["membTitle", "Título banner miembros", "tMembTitle", "darktitle"],
+  ["membPerks", "Beneficios miembros", "tMembPerks", "dark"],
+  ["promoTitle", "Cartel registro (título)", "tPromoTitle", "plain"],
+  ["promoSub", "Cartel registro (texto)", "tPromoSub", "plain"]
+];
+const TEXTOS_CONTACTO = [
+  ["contTitle", "Título", "tContTitle", "title"],
+  ["contSub", "Subtítulo", "tContSub", "sub"],
+  ["contEmail", "Email mostrado", "tContEmail", "plain"],
+  ["contInsta", "Instagram mostrado", "tContInsta", "plain"]
+];
+async function loadTextos(){
+  try {
+    const r = await fetch(AUTH_URL+"/api/ajustes");
+    const d = await r.json();
+    if(!r.ok) return;
+    const all = [...TEXTOS_INICIO, ...TEXTOS_CONTACTO];
+    all.forEach(([clave,, elId])=>{
+      if(d.ajustes[clave] !== undefined){
+        const el = document.getElementById(elId);
+        if(el) el.innerHTML = d.ajustes[clave];
+      }
+    });
+  } catch {}
+}
+function paintTextEditor(boxId, defs){
+  const box = document.getElementById(boxId);
+  box.innerHTML = defs.map(([clave, label, elId, kind])=>{
+    const cur = (document.getElementById(elId)?.innerText || "").trim();
+    const rows = cur.length > 60 ? 3 : 1;
+    return `<div class="adm-prod"><div class="adm-fields">
+      <strong>${label}</strong>
+      <span class="muted small">Así se ve ahora:</span>
+      <div class="pv pv-${kind || "plain"}">${cur.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</div>
+      <textarea data-tkey="${clave}" rows="${rows}">${cur.replace(/</g,"&lt;")}</textarea>
+    </div></div>`;
+  }).join("");
+}
+function escHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+async function saveTextos(boxId, msgId){
+  const data = {};
+  document.querySelectorAll(`#${boxId} [data-tkey]`).forEach(i=>data[i.dataset.tkey] = escHtml(i.value).replace(/\n/g,"<br>"));
+  const m = document.getElementById(msgId);
+  m.textContent = "Guardando...";
+  try {
+    const r = await fetch(AUTH_URL+"/api/admin/ajustes",{method:"PUT",headers:admHeaders(),body:JSON.stringify(data)});
+    if(!r.ok) throw new Error();
+    Object.entries(data).forEach(([k,v])=>{
+      const def = [...TEXTOS_INICIO, ...TEXTOS_CONTACTO].find(d=>d[0]===k);
+      if(def){ const el = document.getElementById(def[2]); if(el) el.innerHTML = v; }
+    });
+    m.textContent = "Guardado ✓ ya se ve en la tienda";
+  } catch { m.textContent = "Error (¿sesión vencida?)"; }
+}
+document.getElementById("saveInicio").onclick = ()=>saveTextos("editInicioFields","saveInicioMsg");
+document.getElementById("saveContacto").onclick = ()=>saveTextos("editContactoFields","saveContactoMsg");
+// Editor del menú lateral (apartados)
+function paintMenuEditor(){
+  const box = document.getElementById("menuEditor");
+  const tops = MENU.top.filter(t=>!t.menu);
+  box.innerHTML =
+    `<div class="adm-prod"><div class="adm-fields">
+      <strong>Apartados de arriba</strong>
+      ${tops.map((t,i)=>`<div class="row2"><label>Nombre<input data-mtop="${i}" value="${t.label.replace(/"/g,"&quot;")}" /></label><div style="display:flex;gap:6px;align-items:end"><label style="flex:1">Link<input data-mhref="${i}" value="${t.href}" /></label><button type="button" class="btn ghost" data-mdel="${i}" title="Eliminar">✕</button></div></div>`).join("")}
+      <div class="row2"><input id="mNewLabel" placeholder="Nuevo apartado..." /><input id="mNewHref" placeholder="Link ej #/ofertas" /></div>
+      <div><button type="button" id="mAddTop" class="btn ghost">+ Agregar apartado</button></div>
+    </div></div>` +
+    Object.entries(MENU.cats).map(([key,c])=>`
+      <div class="adm-prod"><div class="adm-fields">
+        <label>Nombre de la sección<input data-mcat="${key}" value="${c.label.replace(/"/g,"&quot;")}" /></label>
+        <span class="muted small">Apartados de ${c.label}:</span>
+        ${(c.subs||[]).map((s,j)=>`<div class="row2"><label>Apartado<input data-msub="${key}:${j}" value="${s.label.replace(/"/g,"&quot;")}" /></label><div style="display:flex;gap:6px;align-items:end"><label style="flex:1">Filtro<input data-msubq="${key}:${j}" value="${s.q||""}" placeholder="ej pollera (vacío = ver todo)" /></label><button type="button" class="btn ghost" data-msubdel="${key}:${j}" title="Eliminar">✕</button></div></div>`).join("")}
+        <div class="row2"><input id="mNewSub-${key}" placeholder="Nuevo apartado..." /><button type="button" class="btn ghost" data-msubadd="${key}">+ Agregar</button></div>
+      </div></div>`).join("");
+  document.getElementById("mAddTop").onclick = ()=>{
+    const l = document.getElementById("mNewLabel").value.trim(), h = document.getElementById("mNewHref").value.trim() || "#inicio";
+    if(l){ MENU.top.push({ label: l, href: h }); paintMenuEditor(); }
+  };
+  box.querySelectorAll("[data-mdel]").forEach(b=>b.onclick=()=>{
+    const items = MENU.top.filter(t=>!t.menu);
+    items.splice(Number(b.dataset.mdel), 1);
+    const prod = MENU.top.find(t=>t.menu) || defaultMenu().top.find(t=>t.menu);
+    MENU.top = [items[0] || { label: "Inicio", href: "#inicio" }, prod, ...items.slice(1)];
+    paintMenuEditor();
+  });
+  Object.keys(MENU.cats).forEach(key=>{
+    const add = document.querySelector(`[data-msubadd="${key}"]`);
+    if(add) add.onclick = ()=>{
+      const v = document.getElementById(`mNewSub-${key}`).value.trim();
+      if(!v) return;
+      MENU.cats[key].subs.push({ label: v, href: `#/${key}/` + v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]+/g,""), q: "" });
+      paintMenuEditor();
+    };
+  });
+  box.querySelectorAll("[data-msubdel]").forEach(b=>b.onclick=()=>{
+    const [key, j] = b.dataset.msubdel.split(":");
+    MENU.cats[key].subs.splice(Number(j), 1);
+    paintMenuEditor();
+  });
+}
+document.getElementById("saveMenu").onclick = async ()=>{
+  const msg = document.getElementById("saveMenuMsg");
+  // leer apartados de arriba (Productos queda fijo segundo)
+  const items = [];
+  document.querySelectorAll("#menuEditor [data-mtop]").forEach(inp=>{
+    const i = Number(inp.dataset.mtop);
+    items[i] = { label: inp.value.trim(), href: document.querySelector(`[data-mhref="${i}"]`).value.trim() || "#inicio" };
+  });
+  const clean = items.filter(t=>t && t.label);
+  const prod = MENU.top.find(t=>t.menu) || defaultMenu().top.find(t=>t.menu);
+  MENU.top = [clean[0] || { label: "Inicio", href: "#inicio" }, prod, ...clean.slice(1)];
+  // leer secciones y apartados
+  Object.keys(MENU.cats).forEach(key=>{
+    const lab = document.querySelector(`[data-mcat="${key}"]`);
+    if(lab && lab.value.trim()) MENU.cats[key].label = lab.value.trim();
+    MENU.cats[key].subs.forEach((s,j)=>{
+      const li = document.querySelector(`[data-msub="${key}:${j}"]`);
+      const qi = document.querySelector(`[data-msubq="${key}:${j}"]`);
+      if(li && li.value.trim()){
+        s.label = li.value.trim();
+        s.href = s.all ? `#/${key}` : (s.href.endsWith("/ofertas") ? s.href : `#/${key}/` + s.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]+/g,""));
+        if(qi) s.q = qi.value.trim();
+      }
+    });
+  });
+  msg.textContent = "Guardando...";
+  try {
+    const r = await fetch(AUTH_URL+"/api/admin/ajustes",{method:"PUT",headers:admHeaders(),body:JSON.stringify({ menu: JSON.stringify(MENU) })});
+    if(!r.ok) throw new Error();
+    renderMenus();
+    msg.textContent = "Menú guardado ✓ ya se ve en la tienda";
+  } catch { msg.textContent = "Error (¿sesión vencida?)"; }
 };
 function renderMedios(total){
   const box = document.getElementById("mediosTable");
@@ -879,23 +1272,29 @@ document.getElementById("forgotSave").onclick = async ()=>{
   } catch(err) { msg.textContent = "✕ " + err.message; }
 };
 document.getElementById("openAuth").onclick = openAuthModal;
-document.getElementById("accountBtn").onclick = ()=>{
-  if(isAdmin()){
-    if(confirm("Sesión admin activa. ¿Ir al panel? (Cancelar = cerrar sesión admin)")){ showAdmin(true); return; }
-    sessionStorage.removeItem("acacia_admin");
-    showAdmin(false);
-    return;
+document.getElementById("accountBtn").onclick = e=>{
+  e.stopPropagation();
+  let logged = isAdmin();
+  if(!logged){
+    try { logged = !!JSON.parse(localStorage.getItem("acacia_member")||"null")?.email; } catch {}
   }
-  try {
-    const m = JSON.parse(localStorage.getItem("acacia_member")||"null");
-    if(m?.nombre && confirm(`Sesión: ${m.nombre} (${m.email})\n¿Cerrar sesión?`)){
-      localStorage.removeItem("acacia_member");
-      document.getElementById("authState").textContent = "";
-      paintMember();
-      return;
-    }
-  } catch {}
-  openAuthModal();
+  if(!logged){ openAuthModal(); return; }
+  const menu = document.getElementById("accountMenu");
+  menu.hidden = !menu.hidden;
+};
+document.addEventListener("click", e=>{
+  const menu = document.getElementById("accountMenu");
+  if(menu && !menu.hidden && !e.target.closest("#accountMenu") && !e.target.closest("#accountBtn")) menu.hidden = true;
+});
+document.getElementById("menuLogout").onclick = ()=>{
+  localStorage.removeItem("acacia_member");
+  sessionStorage.removeItem("acacia_admin");
+  document.getElementById("accountMenu").hidden = true;
+  document.getElementById("authState").textContent = "";
+  showAdmin(false);
+  paintMember();
+  location.hash = "";
+  showView(["inicio", "shopBanner", "categorias", "productos", "memberBanner", "pagos"]);
 };
 document.getElementById("closeAuth").onclick = ()=>document.getElementById("authModal").hidden=true;
 function setRegErr(wrap, valid){ const w=document.getElementById(wrap); if(w){ w.classList.toggle("bad",!valid); const e=w.querySelector(".err"); if(e) e.hidden=!!valid; } return !!valid; }
@@ -947,8 +1346,7 @@ document.getElementById("regForm").addEventListener("submit", async e=>{
     msg.textContent = "✕ " + (m.includes("Failed to fetch") ? "Backend no responde en "+AUTH_URL+" (npm run dev)" : m);
   }
 });
-document.getElementById("loginForm").addEventListener("submit", async e=>{
-  e.preventDefault();
+document.getElementById("loginForm").addEventListener("submit", async e=>{  e.preventDefault();
   const l = document.getElementById("lUser").value.trim().toLowerCase();
   const p = document.getElementById("lPass").value;
   const msg = document.getElementById("loginMsg");
@@ -970,7 +1368,103 @@ document.getElementById("loginForm").addEventListener("submit", async e=>{
     setTimeout(()=>document.getElementById("authModal").hidden=true, 700);
   } catch(err) { msg.textContent = "✕ " + err.message; }
 });
+// Entrada rápida: código por email + Google + Facebook
+function socialOk(user){
+  localStorage.setItem("acacia_member", JSON.stringify(user));
+  document.getElementById("loginMsg").textContent = "¡Hola de nuevo!";
+  paintMember();
+  setTimeout(()=>document.getElementById("authModal").hidden = true, 700);
+}
+document.getElementById("codeBtn").onclick = ()=>{
+  const b = document.getElementById("codeBox");
+  b.hidden = !b.hidden;
+};
+document.getElementById("cSend").onclick = async ()=>{
+  const em = document.getElementById("cLoginEmail").value.trim().toLowerCase();
+  const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
+  const w = document.getElementById("w-cEmail");
+  w.classList.toggle("bad", !ok);
+  w.querySelector(".err").hidden = ok;
+  if(!ok) return;
+  document.getElementById("loginMsg").textContent = "Enviando código a tu Gmail...";
+  try {
+    const r = await fetch(AUTH_URL+"/api/auth/codigo",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error||"Error");
+    document.getElementById("loginMsg").textContent = "Código enviado. Revisá tu Gmail.";
+  } catch(err) { document.getElementById("loginMsg").textContent = "✕ " + err.message; }
+};
+document.getElementById("cEnter").onclick = async ()=>{
+  const em = document.getElementById("cLoginEmail").value.trim().toLowerCase();
+  const code = document.getElementById("cLoginCode").value.trim();
+  if(!/^\d{6}$/.test(code)){ const w=document.getElementById("w-cCode"); w.classList.add("bad"); w.querySelector(".err").hidden=false; return; }
+  document.getElementById("loginMsg").textContent = "Entrando...";
+  try {
+    const r = await fetch(AUTH_URL+"/api/auth/entrar-codigo",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,codigo:code})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error||"Error");
+    socialOk(d.user);
+  } catch(err) { document.getElementById("loginMsg").textContent = "✕ " + err.message; }
+};
+if(GOOGLE_CLIENT_ID){
+  document.getElementById("googleBtnCustom").style.display = "none";
+  const s = document.createElement("script");
+  s.src = "https://accounts.google.com/gsi/client";
+  s.onload = ()=>{
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: async resp=>{
+      try {
+        const r = await fetch(AUTH_URL+"/api/auth/google",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idToken:resp.credential})});
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.error||"Error");
+        socialOk(d.user);
+      } catch(err) { document.getElementById("loginMsg").textContent = "✕ " + err.message; }
+    }});
+    google.accounts.id.renderButton(document.getElementById("googleBtn"), { theme: "outline", size: "large", width: 280 });
+  };
+  document.head.appendChild(s);
+}
+document.getElementById("googleBtnCustom").onclick = ()=>{
+  document.getElementById("loginMsg").textContent = "Login con Google en configuración: hay que crear el ID de cliente en Google Cloud (10 min, gratis) y pegarlo en el código.";
+};
+if(FB_APP_ID){
+  window.fbAsyncInit = ()=>FB.init({ appId: FB_APP_ID, cookie: true, xfbml: false, version: "v20.0" });
+  const s = document.createElement("script");
+  s.src = "https://connect.facebook.net/es_LA/sdk.js";
+  document.head.appendChild(s);
+  document.getElementById("fbBtn").onclick = ()=>FB.login(function(resp){
+    (async ()=>{
+      if(resp.status !== "connected"){ document.getElementById("loginMsg").textContent = "✕ No se pudo conectar"; return; }
+      try {
+        const r = await fetch(AUTH_URL+"/api/auth/facebook",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accessToken:resp.authResponse.accessToken})});
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.error||"Error");
+        socialOk(d.user);
+      } catch(err) { document.getElementById("loginMsg").textContent = "✕ " + err.message; }
+    })();
+  });
+} else {
+  document.getElementById("fbBtn").onclick = ()=>{
+    document.getElementById("loginMsg").textContent = "Login con Facebook en configuración: requiere crear la app en Meta y su revisión (unos días). Por ahora usá Google o código por email.";
+  };
+}
 
+// Términos y privacidad (lectura obligatoria antes de crear cuenta)
+function openTerms(tab){
+  document.getElementById("terms-terms").hidden = tab !== "terms";
+  document.getElementById("terms-priv").hidden = tab !== "priv";
+  document.getElementById("termsModal").hidden = false;
+}
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-terms]");
+  if(t){ e.preventDefault(); openTerms(t.dataset.terms); }
+});
+document.getElementById("closeTerms").onclick = ()=>document.getElementById("termsModal").hidden = true;
+document.getElementById("tabTerms").onclick = ()=>openTerms("terms");
+document.getElementById("tabPriv").onclick = ()=>openTerms("priv");
+document.getElementById("acceptTerms").onclick = ()=>{
+  document.getElementById("rTerms").checked = true;
+  document.getElementById("termsModal").hidden = true;
+};
 document.querySelectorAll(".eye[data-eye]").forEach(b=>b.onclick=()=>{
   const inp = document.getElementById(b.dataset.eye);
   if(!inp) return;
@@ -979,6 +1473,200 @@ document.querySelectorAll(".eye[data-eye]").forEach(b=>b.onclick=()=>{
   b.textContent = show ? "🙈" : "👁";
   b.setAttribute("aria-label", show ? "Ocultar contraseña" : "Ver contraseña");
 });
+
+// ===== MI CUENTA estilo Nike =====
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+let cuentaSide = "perfil";
+function getFavs(){ try { return JSON.parse(localStorage.getItem("acacia_favs") || "[]"); } catch { return []; } }
+function isFav(id){ return getFavs().includes(id); }
+function toggleFav(id){
+  let f = getFavs();
+  f = f.includes(id) ? f.filter(x=>x !== id) : [...f, id];
+  localStorage.setItem("acacia_favs", JSON.stringify(f));
+  render();
+  if(parseRoute()?.type === "cuenta") renderCuenta("favoritos");
+  const pp = document.getElementById("ppFav");
+  if(pp) pp.classList.toggle("on", f.includes(id));
+}
+async function renderCuenta(tab){
+  const em = memberEmail();
+  const loginBox = document.getElementById("cuentaLogin");
+  const body = document.getElementById("cuentaBody");
+  if(!em){
+    loginBox.hidden = false;
+    body.hidden = true;
+    return;
+  }
+  loginBox.hidden = true;
+  body.hidden = false;
+  document.querySelectorAll("[data-ctab]").forEach(b=>b.classList.toggle("on", b.dataset.ctab === tab));
+  let perf = null;
+  try {
+    const r = await fetch(AUTH_URL+"/api/auth/perfil?email="+encodeURIComponent(em));
+    const d = await r.json();
+    if(r.ok) perf = d.perfil;
+  } catch {}
+  const m = (()=>{ try { return JSON.parse(localStorage.getItem("acacia_member")||"{}"); } catch { return {}; } })();
+  const nombre = perf?.nombre || m.nombre || "", apellido = perf?.apellido || m.apellido || "";
+  document.getElementById("cuAvatar").textContent = (nombre[0] || "?").toUpperCase();
+  document.getElementById("cuName").textContent = (nombre + " " + apellido).trim() || em;
+  let desde = "";
+  if(perf?.created_at){
+    const f = new Date(perf.created_at);
+    desde = `Miembro Acacia desde ${MESES[f.getMonth()]} ${f.getFullYear()}`;
+  }
+  document.getElementById("cuSince").textContent = desde;
+  const side = document.getElementById("cuentaSide");
+  const main = document.getElementById("cuentaMain");
+  if(tab === "perfil"){
+    side.innerHTML = ["perfil|Perfil", "prefs|Preferencias de comunicación", "dir|Direcciones", "salir|Salir"].map(s=>{
+      const [k, l] = s.split("|");
+      return `<button type="button" data-cside="${k}" class="${cuentaSide===k?"on":""}">${l}</button>`;
+    }).join("");
+    side.querySelectorAll("[data-cside]").forEach(b=>b.onclick=()=>{
+      if(b.dataset.cside === "salir"){ document.getElementById("menuLogout").click(); return; }
+      cuentaSide = b.dataset.cside;
+      renderCuenta("perfil");
+    });
+    if(cuentaSide === "perfil") renderDetalles(main, perf, em);
+    else if(cuentaSide === "prefs") renderPrefs(main, perf, em);
+    else if(cuentaSide === "dir") renderDirecciones(main, em);
+  } else if(tab === "ordenes"){
+    side.innerHTML = "";
+    main.innerHTML = "<h3>Mis órdenes</h3><div id='ordList' class='cuotas'><p class='muted'>Cargando...</p></div>";
+    try {
+      const r = await fetch(AUTH_URL+"/api/auth/ordenes?email="+encodeURIComponent(em));
+      const d = await r.json();
+      document.getElementById("ordList").innerHTML = (d.ordenes||[]).map(o=>{
+        let items = [];
+        try { items = JSON.parse(o.items || "[]"); } catch {}
+        const f = new Date(o.created_at);
+        return `<div class="cuota-opt"><span><strong>Pedido #${o.id}</strong> — ${fmt(o.total)} — ${o.provincia||""}<br><span class="muted small">${f.toLocaleDateString("es-AR")} · ${(items||[]).map(i=>i.n+"× "+(PRODUCTS.find(p=>p.id===i.id)?.name||i.id)+(i.t?" (talle "+i.t+")":"")).join(", ")}</span></span></div>`;
+      }).join("") || "<p class='muted'>Todavía no tenés compras.</p>";
+    } catch { document.getElementById("ordList").innerHTML = "<p class='muted'>Sin conexión.</p>"; }
+  } else if(tab === "favoritos"){
+    side.innerHTML = "";
+    const favs = getFavs().map(id=>PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+    main.innerHTML = "<h3>Mis favoritos</h3>" + (favs.length
+      ? `<div class="grid" style="grid-template-columns:repeat(2,1fr)">` + favs.map(p=>`
+        <article class="card"><button type="button" class="fav on" data-unfav="${p.id}">♥</button>
+        <img src="${p.img||placeholderImg(p.name)}" alt="${p.name}" data-view="${p.id}" loading="lazy" />
+        <div class="card-body"><h3>${p.name}</h3><div class="price">${fmt(p.price)}</div>
+        ${(p.stock ?? 10) <= 0 ? `<button class="btn ghost" disabled>Fuera de stock</button>`
+          : (p.talles||[]).length ? `<button class="btn primary" data-goto="${p.id}">Elegir talle</button>`
+          : `<button class="btn primary" data-add="${p.id}">Agregar</button>`}</div></article>`).join("") + `</div>`
+      : "<p class='muted'>Tocá el ♥ en los productos para guardarlos acá.</p>");
+    main.querySelectorAll("[data-unfav]").forEach(b=>b.onclick=()=>toggleFav(b.dataset.unfav));
+  } else if(tab === "ajustes"){
+    side.innerHTML = "";
+    main.innerHTML = `<h3>Configuración de la cuenta</h3>
+      <div class="adm-prod"><div class="adm-fields">
+        <strong>Borrar membresía</strong>
+        <p class="muted small">Se borra tu cuenta, tus datos y direcciones. Tus pedidos quedan como registro de la tienda.</p>
+        <label>Confirmá con tu contraseña<input id="delPass" type="password" autocomplete="current-password" placeholder="Contraseña *" /></label>
+        <div><button type="button" id="delAccount" class="btn ghost">Borrar</button></div>
+        <p class="muted small" id="delMsg"></p>
+      </div></div>
+      <div class="adm-prod"><div class="adm-fields">
+        <strong>Desconectar membresía</strong>
+        <p class="muted small">Si desconectás tu membresía, no vas a poder acceder a esta plataforma de la marca Acacia como usuario registrado: se cierran tus puntos, cupones y beneficios hasta que vuelvas a entrar.</p>
+        <div><button type="button" id="disAccount" class="btn ghost">Desconectar</button></div>
+      </div></div>`;
+    document.getElementById("disAccount").onclick = ()=>document.getElementById("menuLogout").click();
+    document.getElementById("delAccount").onclick = async ()=>{
+      const pw = document.getElementById("delPass").value;
+      if(!pw){ document.getElementById("delMsg").textContent = "✕ Poné tu contraseña"; return; }
+      if(!confirm("¿Segura? Se borra tu cuenta de Acacia.")) return;
+      try {
+        const r = await fetch(AUTH_URL+"/api/auth/cuenta",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.error||"Error");
+        document.getElementById("menuLogout").click();
+        alert("Cuenta borrada. ¡Te vamos a extrañar!");
+      } catch(err) { document.getElementById("delMsg").textContent = "✕ "+err.message; }
+    };
+  }
+}
+function renderDetalles(main, perf, em){
+  const f = v => (v ?? "");
+  main.innerHTML = `<h3>Detalles de Cuenta</h3>
+    <div class="adm-prod"><div class="adm-fields">
+      <label>Email<input value="${perf?.email||em}" disabled style="background:#f3ece3" /></label>
+      <label>Nombre<input id="dNom" value="${f(perf?.nombre)}" disabled /></label>
+      <label>Apellido<input id="dApe" value="${f(perf?.apellido)}" disabled /></label>
+      <label>Teléfono<input id="dTel" value="${f(perf?.telefono)}" disabled /></label>
+      <label>DNI<input id="dDni" value="${f(perf?.dni)}" disabled /></label>
+      <label>Fecha de nacimiento<input id="dNac" type="date" value="${perf?.nacimiento ? String(perf.nacimiento).slice(0,10) : ""}" disabled /></label>
+      <label>País<input id="dPais" value="${f(perf?.pais)||"Argentina"}" disabled /></label>
+      <div class="adm-photo-row"><button type="button" id="dEdit" class="btn ghost">Editar</button>
+      <button type="button" id="dSave" class="btn primary" hidden>Guardar</button></div>
+      <p class="muted small" id="dMsg"></p>
+    </div></div>`;
+  const inputs = ["dNom","dApe","dTel","dDni","dNac","dPais"];
+  document.getElementById("dEdit").onclick = ()=>{
+    inputs.forEach(id=>document.getElementById(id).disabled = false);
+    document.getElementById("dEdit").hidden = true;
+    document.getElementById("dSave").hidden = false;
+  };
+  document.getElementById("dSave").onclick = async ()=>{
+    const body = { email: em, nombre: document.getElementById("dNom").value.trim(), apellido: document.getElementById("dApe").value.trim(), telefono: document.getElementById("dTel").value.trim(), dni: document.getElementById("dDni").value.trim(), nacimiento: document.getElementById("dNac").value || null, pais: document.getElementById("dPais").value.trim() };
+    const m = document.getElementById("dMsg");
+    try {
+      const r = await fetch(AUTH_URL+"/api/auth/perfil",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok) throw new Error("Error");
+      const d = await r.json();
+      if(d.user) localStorage.setItem("acacia_member", JSON.stringify(d.user));
+      paintMember();
+      renderCuenta("perfil");
+    } catch { m.textContent = "✕ No se pudo guardar"; }
+  };
+}
+function renderPrefs(main, perf, em){
+  main.innerHTML = `<h3>Preferencias de comunicación</h3>
+    <div class="adm-prod"><div class="adm-fields">
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="pfMail" ${perf?.promo_mail ? "checked" : ""} style="width:auto" /> Recibir promos por email</label>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="pfWa" ${perf?.promo_wa ? "checked" : ""} style="width:auto" /> Recibir avisos por WhatsApp</label>
+      <div><button type="button" id="pfSave" class="btn primary">Guardar</button></div>
+      <p class="muted small" id="pfMsg"></p>
+    </div></div>`;
+  document.getElementById("pfSave").onclick = async ()=>{
+    try {
+      await fetch(AUTH_URL+"/api/auth/perfil",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,promo_mail:document.getElementById("pfMail").checked?1:0,promo_wa:document.getElementById("pfWa").checked?1:0})});
+      document.getElementById("pfMsg").textContent = "Guardado ✓";
+    } catch { document.getElementById("pfMsg").textContent = "✕ Error"; }
+  };
+}
+async function renderDirecciones(main, em){
+  main.innerHTML = `<h3>Direcciones</h3><div id="dirList" class="cuotas"><p class="muted">Cargando...</p></div>
+    <div class="adm-prod"><div class="adm-fields">
+      <strong>Agregar dirección</strong>
+      <div class="row2"><input id="aAlias" placeholder="Alias ej Casa" /><input id="aCalle" placeholder="Calle *" /></div>
+      <div class="row2"><input id="aNum" placeholder="Número" /><input id="aCp" placeholder="CP" /></div>
+      <div class="row2"><input id="aCiudad" placeholder="Localidad" /><input id="aProv" placeholder="Provincia" /></div>
+      <div><button type="button" id="aAdd" class="btn primary">Agregar</button></div>
+      <p class="muted small" id="aMsg"></p>
+    </div></div>`;
+  const load = async ()=>{
+    try {
+      const r = await fetch(AUTH_URL+"/api/auth/direcciones?email="+encodeURIComponent(em));
+      const d = await r.json();
+      document.getElementById("dirList").innerHTML = (d.direcciones||[]).map(x=>`<div class="cuota-opt"><span><strong>${x.alias||"Dirección"}</strong> — ${x.calle} ${x.numero||""}, ${x.ciudad||""} ${x.prov||""} (${x.cp||""})<br><button type="button" class="btn ghost" data-dirdel="${x.id}">Borrar</button></span></div>`).join("") || "<p class='muted'>Sin direcciones.</p>";
+      document.querySelectorAll("[data-dirdel]").forEach(b=>b.onclick=async ()=>{
+        await fetch(AUTH_URL+"/api/auth/direcciones/"+b.dataset.dirdel,{method:"DELETE"});
+        load();
+      });
+    } catch { document.getElementById("dirList").innerHTML = "<p class='muted'>Sin conexión.</p>"; }
+  };
+  await load();
+  document.getElementById("aAdd").onclick = async ()=>{
+    const body = { email: em, alias: document.getElementById("aAlias").value.trim(), calle: document.getElementById("aCalle").value.trim(), numero: document.getElementById("aNum").value.trim(), extra: "", ciudad: document.getElementById("aCiudad").value.trim(), prov: document.getElementById("aProv").value.trim(), cp: document.getElementById("aCp").value.trim() };
+    if(!body.calle){ document.getElementById("aMsg").textContent = "✕ Poné al menos la calle"; return; }
+    await fetch(AUTH_URL+"/api/auth/direcciones",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    document.getElementById("aMsg").textContent = "Agregada ✓";
+    load();
+  };
+}
+document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{ location.hash = "#/cuenta/" + b.dataset.ctab; });
 
 // ===== ADMIN (oculto: se entra con usuario admin en el login de miembros) =====
 function admHeaders(){ return {"Content-Type":"application/json","x-admin-token":sessionStorage.getItem("acacia_admin")||""}; }
@@ -993,17 +1681,26 @@ document.getElementById("admLogoutBtn").onclick = ()=>{
   document.getElementById("inicio")?.scrollIntoView({behavior:"smooth"});
 };
 function showAdmin(on){
-  document.getElementById("admin").hidden = !on;
-  document.getElementById("adminDash").hidden = !on;
-  if(on){ showATab("resumen"); loadStats(); document.getElementById("admin").scrollIntoView({behavior:"smooth"}); }
+  if(on){
+    if(location.hash !== "#/admin") location.hash = "#/admin";
+    else { showView(["admin"]); showATab("resumen"); loadStats(); }
+  } else {
+    document.getElementById("admin").hidden = true;
+    document.getElementById("adminDash").hidden = true;
+    if(location.hash === "#/admin") location.hash = "";
+  }
 }
 document.querySelectorAll("[data-atab]").forEach(b=>b.onclick=()=>showATab(b.dataset.atab));
 function showATab(t){
-  ["resumen","prods","peds","users","cupones"].forEach(k=>document.getElementById("atab-"+k).hidden = k!==t);
+  ["resumen","prods","peds","users","cupones","inicio","contacto","menu"].forEach(k=>document.getElementById("atab-"+k).hidden = k!==t);
+  document.querySelectorAll("[data-atab]").forEach(b=>b.classList.toggle("active", b.dataset.atab===t));
   if(t==="prods") loadAdmProds();
   if(t==="peds") loadAdmPeds();
   if(t==="users") loadAdmUsers();
   if(t==="cupones") loadCupones();
+  if(t==="inicio") paintTextEditor("editInicioFields", TEXTOS_INICIO);
+  if(t==="contacto") paintTextEditor("editContactoFields", TEXTOS_CONTACTO);
+  if(t==="menu") paintMenuEditor();
 }
 function barChart(id, labels, vals){
   const c = document.getElementById(id);
@@ -1059,10 +1756,13 @@ async function loadAdmProds(){
           </div>
           <label>Colores<div class="chips" data-chips="${p.id}">${cols.map(c=>`<span class="chip">${c}<button type="button" data-rmchip="${p.id}" data-c="${c}">✕</button></span>`).join("")}</div>
           <div style="display:flex;gap:6px"><input data-pcolorin="${p.id}" placeholder="Agregar color..." /><button type="button" class="btn ghost" data-addchip="${p.id}">+</button></div></label>
-          <label>Foto (URL)<input data-pimg="${p.id}" value="${String(p.img||"").replace(/"/g,"&quot;")}" placeholder="https://... o subí un archivo" /></label>
+          <label>Talles (los que el cliente puede elegir)<div class="chips" data-tchips="${p.id}">${String(p.talles||"").split(",").map(s=>s.trim()).filter(Boolean).map(t=>`<span class="chip">${t}<button type="button" data-rmtalle="${p.id}" data-t="${t}">✕</button></span>`).join("")}</div>
+          <div style="display:flex;gap:6px"><input data-ptallein="${p.id}" placeholder="Agregar talle ej 40..." /><button type="button" class="btn ghost" data-addtalle="${p.id}">+</button></div></label>
+          <label>Fotos (<span data-gcount="${p.id}">0</span>) — la primera es la principal</label>
+          <div class="gal" data-gal="${p.id}"></div>
+          <div style="display:flex;gap:6px"><input data-pimg="${p.id}" placeholder="Pegar URL y Añadir" /><button type="button" class="btn ghost" data-addurl="${p.id}">+ Añadir</button></div>
           <div class="adm-photo-row">
-            <label class="btn ghost" style="cursor:pointer">📤 Subir foto<input type="file" data-pfile="${p.id}" accept="image/*" hidden /></label>
-            <button type="button" class="btn ghost" data-pdelimg="${p.id}">🗑 Quitar foto</button>
+            <label class="btn ghost" style="cursor:pointer">📤 Subir más fotos<input type="file" data-pfile="${p.id}" accept="image/*" multiple hidden /></label>
             <button type="button" class="btn primary" data-psave="${p.id}">Guardar</button>
           </div>
           <span class="muted small" data-pmsg="${p.id}"></span>
@@ -1071,6 +1771,7 @@ async function loadAdmProds(){
     }).join("");
     const q = (s,id) => box.querySelector(`[data-p${s}="${id}"]`);
     const getColors = id => [...box.querySelectorAll(`[data-rmchip="${id}"]`)].map(b=>b.dataset.c).join(", ");
+    const getTalles = id => [...box.querySelectorAll(`[data-rmtalle="${id}"]`)].map(b=>b.dataset.t).join(", ");
     box.querySelectorAll("[data-addchip]").forEach(b=>b.onclick=()=>{
       const id = b.dataset.addchip;
       const inp = q("colorin",id);
@@ -1086,38 +1787,90 @@ async function loadAdmProds(){
       inp.value = "";
     });
     box.querySelectorAll("[data-rmchip]").forEach(b=>b.onclick=()=>b.closest(".chip").remove());
+    box.querySelectorAll("[data-addtalle]").forEach(b=>b.onclick=()=>{
+      const id = b.dataset.addtalle;
+      const inp = q("tallein",id);
+      const v = inp.value.trim();
+      if(!v) return;
+      const chips = box.querySelector(`[data-tchips="${id}"]`);
+      const s = document.createElement("span");
+      s.className = "chip";
+      s.innerHTML = `${v}<button type="button" data-rmtalle="${id}" data-t="${v}">✕</button>`;
+      s.querySelector("button").onclick = ev=>{ ev.target.closest(".chip").remove(); };
+      chips.appendChild(s);
+      inp.value = "";
+    });
+    box.querySelectorAll("[data-rmtalle]").forEach(b=>b.onclick=()=>b.closest(".chip").remove());
     box.querySelectorAll("[data-pimg]").forEach(inp=>inp.addEventListener("input", ()=>{
       const id = inp.dataset.pimg;
       const th = box.querySelector(`[data-thumb="${id}"]`);
-      if(th) th.src = fullImg(inp.value) || placeholderImg("?");
+      if(th && inp.value.trim()) th.src = fullImg(inp.value.trim());
     }));
+    async function paintGal(id){
+      const gal = box.querySelector(`[data-gal="${id}"]`);
+      const cnt = box.querySelector(`[data-gcount="${id}"]`);
+      const th = box.querySelector(`[data-thumb="${id}"]`);
+      try {
+        const r = await fetch(AUTH_URL+"/api/admin/fotos/"+id,{headers:admHeaders()});
+        const d = await r.json();
+        if(!r.ok) throw new Error();
+        const fotos = d.fotos || [];
+        if(cnt) cnt.textContent = fotos.length;
+        gal.innerHTML = fotos.map(f=>`<span class="g"><img src="${fullImg(f.url)}" alt="" onerror="this.style.visibility='hidden'" /><button type="button" data-gdel="${f.id}" data-gpid="${id}" title="Borrar">✕</button></span>`).join("") || "<span class='muted small'>Sin fotos todavía.</span>";
+        if(th) th.src = fotos.length ? fullImg(fotos[0].url) : placeholderImg("?");
+        const card = box.querySelector(`[data-card="${id}"]`);
+        if(card) card.dataset.main = fotos.length ? fotos[0].url : "";
+        gal.querySelectorAll("[data-gdel]").forEach(b=>b.onclick=async ()=>{
+          if(!confirm("¿Borrar esta foto?")) return;
+          await fetch(AUTH_URL+"/api/admin/fotos/"+b.dataset.gdel,{method:"DELETE",headers:admHeaders()});
+          paintGal(id);
+          syncProducts();
+        });
+      } catch { gal.innerHTML = "<span class='muted small'>No se pudo cargar.</span>"; }
+    }
+    d.stock.forEach(p=>paintGal(p.id));
+    async function addUrlFoto(id, url){
+      url = (url||"").trim();
+      if(!url) return;
+      const m = box.querySelector(`[data-pmsg="${id}"]`);
+      m.textContent = "Añadiendo...";
+      const rr = await fetch(AUTH_URL+"/api/admin/fotos",{method:"POST",headers:admHeaders(),body:JSON.stringify({producto_id:id,url})});
+      m.textContent = rr.ok ? "Foto añadida ✓" : "Error";
+      if(rr.ok){ box.querySelector(`[data-pimg="${id}"]`).value = ""; paintGal(id); syncProducts(); }
+    }
+    box.querySelectorAll("[data-addurl]").forEach(b=>b.onclick=()=>{
+      const id = b.dataset.addurl;
+      addUrlFoto(id, box.querySelector(`[data-pimg="${id}"]`).value);
+    });
     box.querySelectorAll("[data-pfile]").forEach(fi=>fi.onchange=async ()=>{
       const id = fi.dataset.pfile;
-      if(!fi.files[0]) return;
-      const fd = new FormData();
-      fd.append("foto", fi.files[0]);
+      if(!fi.files.length) return;
       const m = box.querySelector(`[data-pmsg="${id}"]`);
-      m.textContent = "Subiendo...";
-      try {
-        const rr = await fetch(AUTH_URL+"/api/admin/upload",{method:"POST",headers:{"x-admin-token":sessionStorage.getItem("acacia_admin")||""},body:fd});
-        const dd = await rr.json();
-        if(!rr.ok) throw new Error(dd.error||"Error");
-        q("img",id).value = dd.full || (AUTH_URL + dd.url);
-        box.querySelector(`[data-thumb="${id}"]`).src = dd.full || (AUTH_URL + dd.url);
-        m.textContent = "Foto subida ✓ (apretá Guardar)";
-      } catch(err) { m.textContent = "✕ "+err.message; }
-    });
-    box.querySelectorAll("[data-pdelimg]").forEach(b=>b.onclick=()=>{
-      const id = b.dataset.pdelimg;
-      q("img",id).value = "";
-      box.querySelector(`[data-thumb="${id}"]`).src = placeholderImg("?");
-      box.querySelector(`[data-pmsg="${id}"]`).textContent = "Foto quitada (apretá Guardar)";
+      m.textContent = `Subiendo ${fi.files.length}...`;
+      let ok = 0;
+      for(const f of fi.files){
+        const fd = new FormData();
+        fd.append("foto", f);
+        try {
+          const rr = await fetch(AUTH_URL+"/api/admin/upload",{method:"POST",headers:{"x-admin-token":sessionStorage.getItem("acacia_admin")||""},body:fd});
+          const dd = await rr.json();
+          if(!rr.ok) continue;
+          const url = dd.full || (AUTH_URL + dd.url);
+          const r2 = await fetch(AUTH_URL+"/api/admin/fotos",{method:"POST",headers:admHeaders(),body:JSON.stringify({producto_id:id,url})});
+          if(r2.ok) ok++;
+        } catch {}
+      }
+      m.textContent = ok ? `${ok} foto(s) añadidas ✓` : "Error subiendo";
+      fi.value = "";
+      paintGal(id);
+      syncProducts();
     });
     box.querySelectorAll("[data-psave]").forEach(b=>b.onclick=async ()=>{
       const id = b.dataset.psave;
       const m = box.querySelector(`[data-pmsg="${id}"]`);
       m.textContent = "Guardando...";
-      const rr = await fetch(AUTH_URL+"/api/admin/productos/"+id,{method:"PUT",headers:admHeaders(),body:JSON.stringify({nombre:q("name",id).value.trim(),stock:Number(q("stock",id).value),precio:Number(q("price",id).value),img:q("img",id).value.trim(),color:getColors(id)})});
+      const main = box.querySelector(`[data-card="${id}"]`)?.dataset.main || "";
+      const rr = await fetch(AUTH_URL+"/api/admin/productos/"+id,{method:"PUT",headers:admHeaders(),body:JSON.stringify({nombre:q("name",id).value.trim(),stock:Number(q("stock",id).value),precio:Number(q("price",id).value),img:main,color:getColors(id),talles:getTalles(id)})});
       m.textContent = rr.ok ? "Guardado ✓" : "Error";
       if(rr.ok) syncProducts();
     });
@@ -1145,6 +1898,7 @@ document.getElementById("npImg").addEventListener("input", e=>{
   p.src = e.target.value;
 });
 const npColors = new Set();
+const npTalles = new Set();
 function paintNpChips(){
   document.getElementById("npChips").innerHTML = [...npColors].map(c=>`<span class="chip">${c}<button type="button" data-nprm="${c}">✕</button></span>`).join("");
   document.querySelectorAll("[data-nprm]").forEach(b=>b.onclick=()=>{ npColors.delete(b.dataset.nprm); paintNpChips(); });
@@ -1153,12 +1907,20 @@ document.getElementById("npColorAdd").onclick = ()=>{
   const v = document.getElementById("npColorIn").value.trim().toLowerCase();
   if(v){ npColors.add(v); document.getElementById("npColorIn").value = ""; paintNpChips(); }
 };
+function paintNpTalles(){
+  document.getElementById("npTalles").innerHTML = [...npTalles].map(t=>`<span class="chip">${t}<button type="button" data-nptrm="${t}">✕</button></span>`).join("");
+  document.querySelectorAll("[data-nptrm]").forEach(b=>b.onclick=()=>{ npTalles.delete(b.dataset.nptrm); paintNpTalles(); });
+}
+document.getElementById("npTalleAdd").onclick = ()=>{
+  const v = document.getElementById("npTalleIn").value.trim();
+  if(v){ npTalles.add(v); document.getElementById("npTalleIn").value = ""; paintNpTalles(); }
+};
 document.getElementById("npNombre").addEventListener("input", e=>{
   const slug = e.target.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60);
   document.getElementById("npId").value = slug;
 });
 document.getElementById("npSave").onclick = async ()=>{
-  const body = { id: document.getElementById("npId").value.trim(), nombre: document.getElementById("npNombre").value.trim(), precio: Number(document.getElementById("npPrecio").value), stock: Number(document.getElementById("npStock").value), categoria: document.getElementById("npCat").value||"mujer", color: [...npColors].join(", "), img: document.getElementById("npImg").value.trim(), descrip: document.getElementById("npDesc").value.trim() };
+  const body = { id: document.getElementById("npId").value.trim(), nombre: document.getElementById("npNombre").value.trim(), precio: Number(document.getElementById("npPrecio").value), stock: Number(document.getElementById("npStock").value), categoria: document.getElementById("npCat").value||"mujer", color: [...npColors].join(", "), talles: [...npTalles].join(", "), img: document.getElementById("npImg").value.trim(), descrip: document.getElementById("npDesc").value.trim() };
   const r = await fetch(AUTH_URL+"/api/admin/productos",{method:"POST",headers:admHeaders(),body:JSON.stringify(body)});
   document.getElementById("npMsg").textContent = r.ok ? "Guardado ✓" : "Error (falta id/nombre)";
   if(r.ok){ loadAdmProds(); syncProducts(); }
@@ -1192,6 +1954,9 @@ if(!BACKEND_ENABLED){
 }
 paintMember();
 render();
+loadTextos();
+loadMenu();
+applyRoute(false);
 heroShow(0);
 heroAuto();
 updateCartUI();

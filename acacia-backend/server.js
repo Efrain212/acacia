@@ -274,7 +274,8 @@ async function initShopTables(){
     nacimiento DATE NULL, acepto_terminos TINYINT(1) DEFAULT 1,
     puntos INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
   for(const q of ['ALTER TABLE clientes MODIFY pass_hash VARCHAR(255) NULL',
-    'ALTER TABLE clientes MODIFY usuario VARCHAR(60) NULL']) {
+    'ALTER TABLE clientes MODIFY usuario VARCHAR(60) NULL',
+    'ALTER TABLE productos ADD COLUMN IF NOT EXISTS talles VARCHAR(200) DEFAULT \'\'']) {
     try { await p.query(q); } catch {}
   }
   await p.query(`CREATE TABLE IF NOT EXISTS productos (
@@ -409,7 +410,7 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     const [[vt]] = await p.query('SELECT COALESCE(SUM(total),0) t FROM pedidos');
     const [[vs]] = await p.query('SELECT COUNT(*) c FROM visitas');
     const [prov] = await p.query('SELECT provincia, COUNT(*) n, COALESCE(SUM(total),0) total FROM pedidos GROUP BY provincia ORDER BY n DESC LIMIT 15');
-    const [stock] = await p.query('SELECT id, nombre, stock, precio, img FROM productos ORDER BY stock ASC');
+    const [stock] = await p.query('SELECT id, nombre, stock, precio, img, color, talles FROM productos ORDER BY stock ASC');
     res.json({ ok: true, usuarios: u.c, ventas: v.c, totalVentas: vt.t, visitas: vs.c, porProvincia: prov, stock });
   } catch(e) { res.status(500).json({ error: 'Error stats' }); }
 });
@@ -423,18 +424,18 @@ app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
 });
 app.put('/api/admin/productos/:id', requireAdmin, async (req, res) => {
   try {
-    const { nombre, precio, img, stock, categoria, color, descrip } = req.body || {};
-    await (await db()).query('UPDATE productos SET nombre=COALESCE(?,nombre), precio=COALESCE(?,precio), img=COALESCE(?,img), stock=COALESCE(?,stock), categoria=COALESCE(?,categoria), color=COALESCE(?,color), descrip=COALESCE(?,descrip) WHERE id=?',
-      [nombre??null, precio??null, img??null, stock??null, categoria??null, color??null, descrip??null, req.params.id]);
+    const { nombre, precio, img, stock, categoria, color, descrip, talles } = req.body || {};
+    await (await db()).query('UPDATE productos SET nombre=COALESCE(?,nombre), precio=COALESCE(?,precio), img=COALESCE(?,img), stock=COALESCE(?,stock), categoria=COALESCE(?,categoria), color=COALESCE(?,color), descrip=COALESCE(?,descrip), talles=COALESCE(?,talles) WHERE id=?',
+      [nombre??null, precio??null, img??null, stock??null, categoria??null, color??null, descrip??null, talles??null, req.params.id]);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Error' }); }
 });
 app.post('/api/admin/productos', requireAdmin, async (req, res) => {
   try {
-    const { id, nombre, precio, categoria, color, img, descrip, stock } = req.body || {};
+    const { id, nombre, precio, categoria, color, img, descrip, stock, talles } = req.body || {};
     if(!id || !nombre) return res.status(400).json({ error: 'id y nombre obligatorios' });
-    await (await db()).query('INSERT INTO productos (id,nombre,precio,categoria,color,img,descrip,stock) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE nombre=VALUES(nombre),precio=VALUES(precio),categoria=VALUES(categoria),color=VALUES(color),img=VALUES(img),descrip=VALUES(descrip),stock=VALUES(stock)',
-      [id, nombre, Number(precio)||0, categoria||'mujer', color||'', img||'', descrip||'', Number(stock)||0]);
+    await (await db()).query('INSERT INTO productos (id,nombre,precio,categoria,color,img,descrip,stock,talles) VALUES (?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE nombre=VALUES(nombre),precio=VALUES(precio),categoria=VALUES(categoria),color=VALUES(color),img=VALUES(img),descrip=VALUES(descrip),stock=VALUES(stock),talles=VALUES(talles)',
+      [id, nombre, Number(precio)||0, categoria||'mujer', color||'', img||'', descrip||'', Number(stock)||0, talles||'']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Error' }); }
 });
@@ -545,6 +546,96 @@ app.post('/api/auth/facebook', async (req, res) => {
     }
     res.json({ ok: true, user: cli[0] });
   } catch(e) { res.status(500).json({ error: 'Error Facebook' }); }
+});
+// ===== MI CUENTA =====
+async function ensureCuenta(p){
+  for(const q of [
+    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nacimiento DATE NULL',
+    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS promo_mail TINYINT DEFAULT 1',
+    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS promo_wa TINYINT DEFAULT 1',
+    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pais VARCHAR(80) DEFAULT \'Argentina\'']) {
+    try { await p.query(q); } catch {}
+  }
+  await p.query(`CREATE TABLE IF NOT EXISTS direcciones (
+    id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) NOT NULL,
+    alias VARCHAR(60) DEFAULT '', calle VARCHAR(120) DEFAULT '', numero VARCHAR(20) DEFAULT '',
+    extra VARCHAR(120) DEFAULT '', ciudad VARCHAR(80) DEFAULT '', prov VARCHAR(80) DEFAULT '',
+    cp VARCHAR(10) DEFAULT '', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(email))`);
+}
+// GET /api/auth/perfil?email=
+app.get('/api/auth/perfil', async (req, res) => {
+  try {
+    const email = String(req.query.email || '').trim().toLowerCase();
+    const p = await db();
+    await ensureCuenta(p);
+    const [rows] = await p.query('SELECT email,usuario,nombre,apellido,dni,telefono,nacimiento,pais,promo_mail,promo_wa,puntos,created_at FROM clientes WHERE email=?', [email]);
+    if(!rows.length) return res.status(404).json({ error: 'No existe' });
+    res.json({ ok: true, perfil: rows[0] });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+// PUT /api/auth/perfil {email, nombre, apellido, telefono, dni, nacimiento, promo_mail, promo_wa}
+app.put('/api/auth/perfil', async (req, res) => {
+  try {
+    const { email, nombre, apellido, telefono, dni, nacimiento, pais, promo_mail, promo_wa } = req.body || {};
+    const em = String(email || '').trim().toLowerCase();
+    if(!em) return res.status(400).json({ error: 'Falta email' });
+    const p = await db();
+    await ensureCuenta(p);
+    await p.query('UPDATE clientes SET nombre=COALESCE(?,nombre), apellido=COALESCE(?,apellido), telefono=COALESCE(?,telefono), dni=COALESCE(?,dni), nacimiento=COALESCE(?,nacimiento), pais=COALESCE(?,pais), promo_mail=COALESCE(?,promo_mail), promo_wa=COALESCE(?,promo_wa) WHERE email=?',
+      [nombre??null, apellido??null, telefono??null, dni??null, nacimiento??null, pais??null, promo_mail??null, promo_wa??null, em]);
+    const [rows] = await p.query('SELECT email,usuario,nombre,apellido FROM clientes WHERE email=?', [em]);
+    res.json({ ok: true, user: rows[0] });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+// Direcciones: GET list, POST add, DELETE
+app.get('/api/auth/direcciones', async (req, res) => {
+  try {
+    const p = await db();
+    await ensureCuenta(p);
+    const [rows] = await p.query('SELECT * FROM direcciones WHERE email=? ORDER BY id', [String(req.query.email||'').trim().toLowerCase()]);
+    res.json({ ok: true, direcciones: rows });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+app.post('/api/auth/direcciones', async (req, res) => {
+  try {
+    const { email, alias, calle, numero, extra, ciudad, prov, cp } = req.body || {};
+    const em = String(email || '').trim().toLowerCase();
+    if(!em || !calle) return res.status(400).json({ error: 'Faltan datos' });
+    const p = await db();
+    await ensureCuenta(p);
+    await p.query('INSERT INTO direcciones (email,alias,calle,numero,extra,ciudad,prov,cp) VALUES (?,?,?,?,?,?,?,?)',
+      [em, alias||'', calle||'', numero||'', extra||'', ciudad||'', prov||'', cp||'']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+app.delete('/api/auth/direcciones/:id', async (req, res) => {
+  try { await (await db()).query('DELETE FROM direcciones WHERE id=?', [req.params.id]); res.json({ ok: true }); }
+  catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+// Órdenes del cliente
+app.get('/api/auth/ordenes', async (req, res) => {
+  try {
+    const [rows] = await (await db()).query('SELECT id,total,provincia,items,created_at FROM pedidos WHERE email=? ORDER BY id DESC LIMIT 50', [String(req.query.email||'').trim().toLowerCase()]);
+    res.json({ ok: true, ordenes: rows });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+// DELETE /api/auth/cuenta {email, password} -> borra la membresía (pedidos quedan como registro)
+app.delete('/api/auth/cuenta', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const p = await db();
+    const [rows] = await p.query('SELECT * FROM clientes WHERE email=?', [email]);
+    if(!rows.length) return res.status(404).json({ error: 'No existe' });
+    if(rows[0].pass_hash){
+      const ok = await bcrypt.compare(password, rows[0].pass_hash);
+      if(!ok) return res.status(401).json({ error: 'Contraseña incorrecta' });
+    }
+    await p.query('DELETE FROM direcciones WHERE email=?', [email]);
+    await p.query('DELETE FROM clientes WHERE email=?', [email]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
 });
 // POST /api/auth/request-code { email } (legado, se mantiene por compatibilidad)
 app.post('/api/auth/request-code', async (req, res) => {
