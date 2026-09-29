@@ -337,7 +337,7 @@ app.get('/api/admin/fotos/:pid', requireAdmin, async (req, res) => {
     }
     const [rows] = await p.query('SELECT * FROM producto_fotos WHERE producto_id=? ORDER BY id', [req.params.pid]);
     res.json({ ok: true, fotos: rows });
-  } catch(e) { res.status(500).json({ error: 'Error' }); }
+  } catch(e) { console.log('GET fotos:', e.message); res.status(500).json({ error: 'Error' }); }
 });
 app.post('/api/admin/fotos', requireAdmin, async (req, res) => {
   try {
@@ -349,7 +349,7 @@ app.post('/api/admin/fotos', requireAdmin, async (req, res) => {
     // si el producto no tiene foto principal, usar la primera
     await p.query("UPDATE productos SET img=COALESCE(NULLIF(img,''), ?) WHERE id=?", [url, producto_id]);
     res.json({ ok: true, id: r.insertId });
-  } catch(e) { res.status(500).json({ error: 'Error' }); }
+  } catch(e) { console.log('POST fotos:', e.message); res.status(500).json({ error: 'Error' }); }
 });
 app.delete('/api/admin/fotos/:id', requireAdmin, async (req, res) => {
   try {
@@ -361,7 +361,7 @@ app.delete('/api/admin/fotos/:id', requireAdmin, async (req, res) => {
       await p.query('UPDATE productos SET img=? WHERE id=?', [g.length ? g[0].url : '', rows[0].producto_id]);
     }
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: 'Error' }); }
+  } catch(e) { console.log('DELETE fotos:', e.message); res.status(500).json({ error: 'Error' }); }
 });
 // Textos editables del sitio (clave/valor). Públicos para leer, admin para guardar.
 async function ensureAjustes(p){
