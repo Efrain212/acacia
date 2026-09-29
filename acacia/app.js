@@ -1880,7 +1880,8 @@ async function loadAdmProds(){
           if(rr.status === 401){ lastErr = "Sesión vencida: salí y entrá de nuevo como admin"; break; }
           const dd = await rr.json().catch(()=>({}));
           if(!rr.ok) throw new Error(dd.error || ("Error " + rr.status));
-          const url = dd.full || (AUTH_URL + dd.url);
+          let url = dd.full || dd.url || "";
+          if(url && !/^(https?:|data:|blob:)/.test(url)) url = AUTH_URL + (url.startsWith("/") ? url : "/" + url);
           const r2 = await fetch(AUTH_URL+"/api/admin/fotos",{method:"POST",headers:admHeaders(),body:JSON.stringify({producto_id:id,url})});
           if(r2.status === 401){ lastErr = "Sesión vencida: salí y entrá de nuevo como admin"; break; }
           if(!r2.ok){ const dd2 = await r2.json().catch(()=>({})); throw new Error(dd2.error || "No se pudo guardar"); }
@@ -1915,9 +1916,11 @@ document.getElementById("npFile").onchange = async e=>{
     const rr = await fetch(AUTH_URL+"/api/admin/upload",{method:"POST",headers:{"x-admin-token":sessionStorage.getItem("acacia_admin")||""},body:fd});
     const dd = await rr.json();
     if(!rr.ok) throw new Error(dd.error||"Error");
-    document.getElementById("npImg").value = dd.full || (AUTH_URL + dd.url);
+    let npUrl = dd.full || dd.url || "";
+    if(npUrl && !/^(https?:|data:|blob:)/.test(npUrl)) npUrl = AUTH_URL + (npUrl.startsWith("/") ? npUrl : "/" + npUrl);
+    document.getElementById("npImg").value = npUrl;
     document.getElementById("npPrev").style.visibility = "visible";
-    document.getElementById("npPrev").src = dd.full || (AUTH_URL + dd.url);
+    document.getElementById("npPrev").src = npUrl;
     document.getElementById("npMsg").textContent = "Foto subida ✓";
   } catch(err) { document.getElementById("npMsg").textContent = "✕ "+err.message; }
 };
