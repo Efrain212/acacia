@@ -1883,7 +1883,7 @@ async function loadAdmProds(){
           const url = dd.full || (AUTH_URL + dd.url);
           const r2 = await fetch(AUTH_URL+"/api/admin/fotos",{method:"POST",headers:admHeaders(),body:JSON.stringify({producto_id:id,url})});
           if(r2.status === 401){ lastErr = "Sesión vencida: salí y entrá de nuevo como admin"; break; }
-          if(!r2.ok) throw new Error("No se pudo guardar");
+          if(!r2.ok){ const dd2 = await r2.json().catch(()=>({})); throw new Error(dd2.error || "No se pudo guardar"); }
           ok++;
         } catch(err) { lastErr = err.message; }
       }
