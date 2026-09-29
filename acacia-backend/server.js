@@ -8,7 +8,8 @@ const PORT = process.env.PORT || 3001;
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || '';
 
 app.use(cors()); // dev: acepta file://, localhost y 127.0.0.1
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, gmail: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASS && !process.env.GMAIL_APP_PASS.includes('xxxx')) }));

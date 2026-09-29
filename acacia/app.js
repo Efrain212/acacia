@@ -808,6 +808,26 @@ function validCard(base){
 }
 function fmtCardNum(el){ el.value = el.value.replace(/\D/g,"").slice(0,16).replace(/(\d{4})(?=\d)/g,"$1 "); }
 function fmtExp(el){ let v=el.value.replace(/\D/g,"").slice(0,4); if(v.length>=3) v=v.slice(0,2)+"/"+v.slice(2); el.value=v; }
+// Comprime fotos del celu antes de subir (máx 1600px, JPG 82%)
+function compressImg(file){
+  return new Promise((res, rej)=>{
+    if(!file.type.startsWith("image/")) return rej(new Error("img"));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{
+      const max = 1600;
+      const sc = Math.min(1, max / Math.max(img.width, img.height));
+      const w = Math.round(img.width * sc), h = Math.round(img.height * sc);
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      c.toBlob(b=>b ? res(new File([b], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" })) : rej(new Error("img")), "image/jpeg", 0.82);
+    };
+    img.onerror = ()=>rej(new Error("img"));
+    img.src = url;
+  });
+}
 ["cardNumber","nxCardNumber","dbNumber"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input", ()=>fmtCardNum(el)); });
 ["cardDni","nxDni","dbDni","fDni"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input", ()=>{ el.value=el.value.replace(/\D/g,"").slice(0,8); }); });
 document.querySelectorAll(".field input").forEach(inp=>inp.addEventListener("input", ()=>{ const w=inp.closest(".field"); if(w){ w.classList.remove("bad"); const e=w.querySelector(".err"); if(e) e.hidden=true; } }));
@@ -1850,7 +1870,9 @@ async function loadAdmProds(){
       let ok = 0;
       for(const f of fi.files){
         const fd = new FormData();
-        fd.append("foto", f);
+        let file = f;
+        try { file = await compressImg(f); } catch {}
+        fd.append("foto", file);
         try {
           const rr = await fetch(AUTH_URL+"/api/admin/upload",{method:"POST",headers:{"x-admin-token":sessionStorage.getItem("acacia_admin")||""},body:fd});
           const dd = await rr.json();
@@ -1880,7 +1902,9 @@ document.getElementById("npFile").onchange = async e=>{
   const f = e.target.files[0];
   if(!f) return;
   const fd = new FormData();
-  fd.append("foto", f);
+  let file = f;
+  try { file = await compressImg(f); } catch {}
+  fd.append("foto", file);
   document.getElementById("npMsg").textContent = "Subiendo foto...";
   try {
     const rr = await fetch(AUTH_URL+"/api/admin/upload",{method:"POST",headers:{"x-admin-token":sessionStorage.getItem("acacia_admin")||""},body:fd});
