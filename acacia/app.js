@@ -127,7 +127,9 @@ function getFiltered(){
 }
 
 function placeholderImg(name){
-  return "https://via.placeholder.com/480x480/E9DCCF/7A4A2E?text=" + encodeURIComponent(name);
+  const t = String(name || "Acacia").slice(0, 18);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='480' height='480'><rect width='480' height='480' fill='#E9DCCF'/><text x='50%' y='52%' font-family='sans-serif' font-size='34' fill='#7A4A2E' text-anchor='middle'>${t}</text></svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
 
 let heroIdx = 0, heroTimer = null;
@@ -1867,22 +1869,25 @@ async function loadAdmProds(){
       if(!fi.files.length) return;
       const m = box.querySelector(`[data-pmsg="${id}"]`);
       m.textContent = `Subiendo ${fi.files.length}...`;
-      let ok = 0;
+      let ok = 0, lastErr = "";
       for(const f of fi.files){
         const fd = new FormData();
         let file = f;
-        try { file = await compressImg(f); } catch {}
+        try { file = await compressImg(f); } catch(err) { lastErr = "No pude leer la imagen"; }
         fd.append("foto", file);
         try {
           const rr = await fetch(AUTH_URL+"/api/admin/upload",{method:"POST",headers:{"x-admin-token":sessionStorage.getItem("acacia_admin")||""},body:fd});
-          const dd = await rr.json();
-          if(!rr.ok) continue;
+          if(rr.status === 401){ lastErr = "Sesión vencida: salí y entrá de nuevo como admin"; break; }
+          const dd = await rr.json().catch(()=>({}));
+          if(!rr.ok) throw new Error(dd.error || ("Error " + rr.status));
           const url = dd.full || (AUTH_URL + dd.url);
           const r2 = await fetch(AUTH_URL+"/api/admin/fotos",{method:"POST",headers:admHeaders(),body:JSON.stringify({producto_id:id,url})});
-          if(r2.ok) ok++;
-        } catch {}
+          if(r2.status === 401){ lastErr = "Sesión vencida: salí y entrá de nuevo como admin"; break; }
+          if(!r2.ok) throw new Error("No se pudo guardar");
+          ok++;
+        } catch(err) { lastErr = err.message; }
       }
-      m.textContent = ok ? `${ok} foto(s) añadidas ✓` : "Error subiendo";
+      m.textContent = ok ? `${ok} foto(s) añadidas ✓` : ("✕ " + (lastErr || "Error subiendo"));
       fi.value = "";
       paintGal(id);
       syncProducts();
