@@ -1756,7 +1756,7 @@ async function loadStats(){
 }
 function fullImg(u){
   if(!u) return "";
-  if(/^https?:\/\//.test(u)) return u;
+  if(/^(https?:|data:|blob:)/.test(u)) return u;
   return AUTH_URL + (u.startsWith("/") ? u : "/" + u);
 }
 async function loadAdmProds(){
