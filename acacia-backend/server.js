@@ -321,7 +321,8 @@ app.post('/api/admin/login', (req, res) => {
 async function ensureFotos(p){
   await p.query(`CREATE TABLE IF NOT EXISTS producto_fotos (
     id INT AUTO_INCREMENT PRIMARY KEY, producto_id VARCHAR(60) NOT NULL,
-    url TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(producto_id))`);
+    url LONGTEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(producto_id))`);
+  try { await p.query('ALTER TABLE producto_fotos MODIFY url LONGTEXT'); } catch {}
 }
 app.get('/api/admin/fotos/:pid', requireAdmin, async (req, res) => {
   try {
@@ -458,6 +459,16 @@ app.post('/api/admin/upload', requireAdmin, async (req, res) => {
     up(req, res, err => {
       if(err) return res.status(400).json({ error: 'Archivo inválido (solo imágenes hasta 5MB)' });
       if(!req.file) return res.status(400).json({ error: 'Subí una imagen' });
+      // Modo DB (Railway): se guarda en MySQL y sobrevive a deploys. Si no, va a disco.
+      if(process.env.UPLOAD_MODE === 'db'){
+        const fs = require('fs');
+        try {
+          const mime = req.file.mimetype || 'image/jpeg';
+          const data = fs.readFileSync(req.file.path).toString('base64');
+          fs.unlink(req.file.path, ()=>{});
+          return res.json({ ok: true, url: `data:${mime};base64,${data}` });
+        } catch(e) { return res.status(500).json({ error: 'Error procesando' }); }
+      }
       res.json({ ok: true, url: '/uploads/' + req.file.filename, full: `http://localhost:${PORT}/uploads/` + req.file.filename });
     });
   } catch(e) { res.status(500).json({ error: 'Error subiendo' }); }
