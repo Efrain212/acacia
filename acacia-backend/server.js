@@ -25,6 +25,11 @@ async function db(){
   if(!pool) pool = mysql.createPool({ ...dbConf, waitForConnections: true, connectionLimit: 5 });
   return pool;
 }
+// MySQL 8 no acepta ADD COLUMN IF NOT EXISTS: se chequea por INFORMATION_SCHEMA
+async function addColumn(p, table, column, ddl){
+  const [rows] = await p.query('SELECT COUNT(*) c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', [table, column]);
+  if(!rows[0].c) await p.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
 function genCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
 async function sendCodeByGmail(to, code){
   const user = process.env.GMAIL_USER, pass = process.env.GMAIL_APP_PASS;
@@ -149,9 +154,8 @@ const CUPON_DDL = `CREATE TABLE IF NOT EXISTS cupones (
   UNIQUE(codigo, email))`;
 async function ensureCupones(p){
   await p.query(CUPON_DDL);
-  for(const c of ['solo_miembros','activo']){
-    try { await p.query(`ALTER TABLE cupones ADD COLUMN IF NOT EXISTS ${c} TINYINT DEFAULT ${c==='activo'?1:0}`); } catch {}
-  }
+  await addColumn(p, 'cupones', 'solo_miembros', 'TINYINT DEFAULT 0');
+  await addColumn(p, 'cupones', 'activo', 'TINYINT DEFAULT 1');
 }
 app.post('/api/promos/validate', async (req, res) => {
   try {
@@ -189,7 +193,7 @@ app.get('/api/miembro/resumen', async (req, res) => {
   try {
     const email = String(req.query.email || '').trim().toLowerCase();
     const p = await db();
-    try { await p.query('ALTER TABLE clientes ADD COLUMN IF NOT EXISTS puntos INT DEFAULT 0'); } catch {}
+    await addColumn(p, 'clientes', 'puntos', 'INT DEFAULT 0')
     await ensureCupones(p);
     const [cli] = await p.query('SELECT puntos FROM clientes WHERE email=?', [email]);
     if(!cli.length) return res.status(400).json({ error: 'No miembro' });
@@ -208,7 +212,7 @@ app.post('/api/pedido/cerrar', async (req, res) => {
     const items = JSON.stringify(req.body?.items || []).slice(0,4000);
     if(!email) return res.json({ ok: true, puntos: 0 });
     const p = await db();
-    try { await p.query('ALTER TABLE clientes ADD COLUMN IF NOT EXISTS puntos INT DEFAULT 0'); } catch {}
+    await addColumn(p, 'clientes', 'puntos', 'INT DEFAULT 0')
     const pts = Math.floor(total / 1000);
     if(pts > 0) await p.query('UPDATE clientes SET puntos = puntos + ? WHERE email=?', [pts, email]);
     if(cupon && cupon !== 'ACACIA10' && cupon !== 'MIEMBRO15')
@@ -274,10 +278,10 @@ async function initShopTables(){
     nacimiento DATE NULL, acepto_terminos TINYINT(1) DEFAULT 1,
     puntos INT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`);
   for(const q of ['ALTER TABLE clientes MODIFY pass_hash VARCHAR(255) NULL',
-    'ALTER TABLE clientes MODIFY usuario VARCHAR(60) NULL',
-    'ALTER TABLE productos ADD COLUMN IF NOT EXISTS talles VARCHAR(200) DEFAULT \'\'']) {
+    'ALTER TABLE clientes MODIFY usuario VARCHAR(60) NULL']) {
     try { await p.query(q); } catch {}
   }
+  await addColumn(p, 'productos', 'talles', 'VARCHAR(200) DEFAULT \'\'');
   await p.query(`CREATE TABLE IF NOT EXISTS productos (
     id VARCHAR(60) PRIMARY KEY, nombre VARCHAR(120) NOT NULL, precio INT NOT NULL DEFAULT 0,
     categoria VARCHAR(40) DEFAULT 'mujer', color VARCHAR(40) DEFAULT '', img TEXT,
@@ -549,13 +553,10 @@ app.post('/api/auth/facebook', async (req, res) => {
 });
 // ===== MI CUENTA =====
 async function ensureCuenta(p){
-  for(const q of [
-    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nacimiento DATE NULL',
-    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS promo_mail TINYINT DEFAULT 1',
-    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS promo_wa TINYINT DEFAULT 1',
-    'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pais VARCHAR(80) DEFAULT \'Argentina\'']) {
-    try { await p.query(q); } catch {}
-  }
+  await addColumn(p, 'clientes', 'nacimiento', 'DATE NULL');
+  await addColumn(p, 'clientes', 'promo_mail', 'TINYINT DEFAULT 1');
+  await addColumn(p, 'clientes', 'promo_wa', 'TINYINT DEFAULT 1');
+  await addColumn(p, 'clientes', 'pais', 'VARCHAR(80) DEFAULT \'Argentina\'');
   await p.query(`CREATE TABLE IF NOT EXISTS direcciones (
     id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) NOT NULL,
     alias VARCHAR(60) DEFAULT '', calle VARCHAR(120) DEFAULT '', numero VARCHAR(20) DEFAULT '',
