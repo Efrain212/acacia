@@ -963,6 +963,10 @@ function handlePagoReturn(){
   try { pago = new URLSearchParams(location.search).get("pago") || ""; } catch { pago = ""; }
   if(!pago) return;
   setTimeout(async ()=>{
+    const title = document.getElementById("thanksTitle");
+    const sub = document.getElementById("thanksSub");
+    const detail = document.getElementById("thanksDetail");
+    const view = document.getElementById("viewSummary");
     if(pago === "exito"){
       let pend = null;
       try { pend = JSON.parse(localStorage.getItem("acacia_pending") || "null"); } catch {}
@@ -972,13 +976,25 @@ function handlePagoReturn(){
       }
       cart = []; saveCart();
       try { localStorage.removeItem("acacia_pending"); } catch {}
-      document.getElementById("thanksDetail").innerHTML = "Pago con Mercado Pago acreditado (sandbox). Coordinamos el envío por WhatsApp.";
-      document.getElementById("thanksDetail").hidden = false;
+      title.textContent = "Gracias por comprar en Acacia Indumentaria";
+      sub.textContent = "Tu pedido fue registrado. Coordinamos el envío por WhatsApp.";
+      detail.innerHTML = "Pago con Mercado Pago acreditado (sandbox). Coordinamos el envío por WhatsApp.";
+      detail.hidden = false;
+      view.hidden = false;
+      view.textContent = "Ver tu Resumen de Pago";
       document.getElementById("thanksModal").hidden = false;
     } else if(pago === "pendiente"){
-      alert("Pago pendiente en Mercado Pago. Te avisamos cuando se acredite.");
+      title.textContent = "Pago pendiente";
+      sub.textContent = "Mercado Pago lo está procesando. Te avisamos cuando se acredite; no pagues de nuevo.";
+      detail.hidden = true;
+      view.hidden = true;
+      document.getElementById("thanksModal").hidden = false;
     } else if(pago === "fallo"){
-      alert("El pago fue rechazado o cancelado. Probá de nuevo.");
+      title.textContent = "El pago fue rechazado";
+      sub.textContent = "No se cobró nada. Probá con otra tarjeta o medio de pago.";
+      detail.hidden = true;
+      view.hidden = true;
+      document.getElementById("thanksModal").hidden = false;
     }
     try { history.replaceState({}, "", location.pathname + location.hash); } catch {}
   }, 600);
