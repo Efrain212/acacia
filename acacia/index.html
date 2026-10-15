@@ -466,24 +466,7 @@
           </div>
 
           <div class="acc-item">
-            <button type="button" class="acc-head active" data-acc="card">Tarjeta de crédito <span>∨</span></button>
-            <div class="acc-body" id="acc-card">
-              <div class="row2">
-                <select id="cardBrand"><option value="">Elige tu Tarjeta...</option><option selected>Naranja X</option><option>Visa</option><option>Mastercard</option><option>Amex</option><option>Cabal</option></select>
-                <select id="cardBank"><option value="">Elige tu Banco</option><option selected>Naranja X</option><option>Galicia</option><option>Nación</option><option>Otro</option></select>
-              </div>
-              <label class="field-label">Cuotas:</label>
-              <div id="cuotasCard" class="cuotas"></div>
-              <label class="field-label">Datos para coordinar el pago (obligatorio, acá no se debita nada):</label>
-              <div class="field" id="w-cardName"><input id="cardName" name="cc-name" autocomplete="cc-name" placeholder="Nombre del titular *" /><span class="err" hidden>✕ Completá el titular</span></div>
-              <div class="row2"><div class="field" id="w-cardDni"><input id="cardDni" placeholder="DNI del pagador *" inputmode="numeric" maxlength="8" /><span class="err" hidden>✕ DNI 7-8 dígitos</span></div><div class="field" id="w-cardEmail"><input id="cardEmail" type="email" autocomplete="email" placeholder="Email *" /><span class="err" hidden>✕ Email válido</span></div></div>
-              <div class="field" id="w-cardBill"><input id="cardBill" placeholder="Dirección de factura *" autocomplete="street-address" /><span class="err" hidden>✕ Dirección de factura</span></div>
-              <p class="muted small">🔒 El pago con tarjeta se coordina por WhatsApp con link de pago. Acá no se cobra ni se guardan datos de tarjetas.</p>
-            </div>
-          </div>
-
-          <div class="acc-item">
-            <button type="button" class="acc-head" data-acc="alias">Pago con Alias - CBU <span>∨</span></button>
+            <button type="button" class="acc-head active" data-acc="alias">Pago con Alias - CBU <span>∨</span></button>
             <div class="acc-body" id="acc-alias" hidden>
               <div class="planz-banner">Transferí el total exacto y mandanos el comprobante</div>
               <div class="nx-box">
@@ -496,31 +479,13 @@
             </div>
           </div>
 
-          <div class="acc-item">
-            <button type="button" class="acc-head" data-acc="debit">Tarjeta de débito <span>∨</span></button>
-            <div class="acc-body" id="acc-debit" hidden>
-              <label class="field-label">Débito (1 pago) — datos para coordinar (acá no se debita nada):</label>
-              <div class="field" id="w-dbName"><input id="dbName" placeholder="Nombre del titular *" autocomplete="cc-name" /><span class="err" hidden>✕ Completá el titular</span></div>
-              <div class="row2"><div class="field" id="w-dbDni"><input id="dbDni" placeholder="DNI del pagador *" inputmode="numeric" maxlength="8" /><span class="err" hidden>✕ DNI</span></div><div class="field" id="w-dbEmail"><input id="dbEmail" type="email" placeholder="Email *" /><span class="err" hidden>✕ Email</span></div></div>
-              <div class="field" id="w-dbBill"><input id="dbBill" placeholder="Dirección de factura *" /><span class="err" hidden>✕ Dirección</span></div>
-              <p class="muted small">🔒 El pago se coordina por WhatsApp.</p>
-            </div>
-          </div>
-
-          <div class="acc-item">
-            <button type="button" class="acc-head" data-acc="cash">Efectivo / Transferencia <span>∨</span></button>
-            <div class="acc-body" id="acc-cash" hidden>
-              <p class="muted">Pagás en efectivo al retirar o por Pago Fácil / Rapipago. Te mandamos el total por WhatsApp.</p>
-            </div>
-          </div>
-
           <div id="pay-nx" hidden></div>
           <div id="pay-card" hidden></div>
           <div id="pay-cash" hidden></div>
           <div id="pay-wa" hidden></div>
 
           <div class="acc-item">
-            <button type="button" id="payMP" class="btn primary full">Pagar con Mercado Pago (sandbox)</button>
+            <button type="button" id="payMP" class="btn primary full">Pagar con Mercado Pago</button>
             <p id="mpMsg" class="muted small"></p>
           </div>
 
@@ -674,6 +639,6 @@
   </div>
 </div>
 
-<script src="app.js?v=66"></script>
+<script src="app.js?v=67"></script>
 </body>
 </html>

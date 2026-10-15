@@ -620,7 +620,7 @@ function renderCuotasBanco(total){
 }
 // Entrega estilo captura pero con colores Acacia: domicilio vs retiro
 const checkoutModal = document.getElementById("checkoutModal");
-let payTab = "card";
+let payTab = "alias";
 let couponDisc = 0;
 let couponCode = "";
 const SHIP = { retiro: 0, provincia: 2500, pais: 4900 };
@@ -701,7 +701,7 @@ function openCheckout(){
   if(hasSaved && !document.getElementById("fName").value && !document.getElementById("fDni").value) fillCheckoutForm(saved);
   gotoStep(1);
   checkoutModal.hidden = false;
-  switchPayTab("card");
+  switchPayTab("alias");
 }
 function switchPayTab(tab){
   payTab = tab;
@@ -2079,8 +2079,8 @@ async function loadAdmUsers(){
 }
 
 initProvLoc();
-document.getElementById("cardBrand").addEventListener("change", updateSummary);
-document.getElementById("cardBank").addEventListener("change", updateSummary);
+document.getElementById("cardBrand")?.addEventListener("change", updateSummary);
+document.getElementById("cardBank")?.addEventListener("change", updateSummary);
 if(!BACKEND_ENABLED){
   // Fase 1: ocultar todo lo que necesita servidor
   document.querySelector('.promo-banner').style.display = 'none';
