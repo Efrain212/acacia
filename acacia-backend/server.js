@@ -203,24 +203,37 @@ app.get('/api/miembro/resumen', async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Error' }); }
 });
 
+// ===== Pagos MP: pendientes + cierre idempotente (webhook y front comparten esto) =====
+async function ensureMpPagos(p){
+  await p.query(`CREATE TABLE IF NOT EXISTS mp_pagos (
+    ref VARCHAR(80) PRIMARY KEY, email VARCHAR(190) DEFAULT '', total INT DEFAULT 0,
+    cupon VARCHAR(40) DEFAULT '', provincia VARCHAR(80) DEFAULT '', items TEXT,
+    status VARCHAR(20) DEFAULT 'pending', payment_id VARCHAR(60) DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX(email))`);
+}
+async function cerrarPedido(p, o){
+  const email = String(o.email || '').trim().toLowerCase();
+  if(!email) return { puntos: 0 };
+  await addColumn(p, 'clientes', 'puntos', 'INT DEFAULT 0');
+  try { await ensureCupones(p); } catch {}
+  const pts = Math.floor(Number(o.total || 0) / 1000);
+  if(pts > 0) await p.query('UPDATE clientes SET puntos = puntos + ? WHERE email=?', [pts, email]);
+  const cupon = String(o.cupon || '').trim().toUpperCase();
+  if(cupon && cupon !== 'ACACIA10' && cupon !== 'MIEMBRO15'){
+    try { await p.query('UPDATE cupones SET usado=1 WHERE codigo=? AND (email=? OR email="")', [cupon, email]); } catch {}
+  }
+  try { await p.query('INSERT INTO pedidos (email,total,provincia,items) VALUES (?,?,?,?)',
+    [email, Number(o.total || 0), String(o.provincia || '').slice(0, 80), JSON.stringify(o.items || []).slice(0, 4000)]); } catch {}
+  const [cli] = await p.query('SELECT puntos FROM clientes WHERE email=?', [email]);
+  return { puntos: cli.length ? cli[0].puntos : pts };
+}
+
 // POST /api/pedido/cerrar {email, total, cupon} -> suma puntos y marca cupón usado
 app.post('/api/pedido/cerrar', async (req, res) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const total = Number(req.body?.total || 0);
-    const cupon = String(req.body?.cupon || '').trim().toUpperCase();
-    const provincia = String(req.body?.provincia || '').slice(0,80);
-    const items = JSON.stringify(req.body?.items || []).slice(0,4000);
-    if(!email) return res.json({ ok: true, puntos: 0 });
-    const p = await db();
-    await addColumn(p, 'clientes', 'puntos', 'INT DEFAULT 0')
-    const pts = Math.floor(total / 1000);
-    if(pts > 0) await p.query('UPDATE clientes SET puntos = puntos + ? WHERE email=?', [pts, email]);
-    if(cupon && cupon !== 'ACACIA10' && cupon !== 'MIEMBRO15')
-      await p.query('UPDATE cupones SET usado=1 WHERE codigo=? AND (email=? OR email="")', [cupon, email]);
-    try { await p.query('INSERT INTO pedidos (email,total,provincia,items) VALUES (?,?,?,?)', [email, total, provincia, items]); } catch {}
-    const [cli] = await p.query('SELECT puntos FROM clientes WHERE email=?', [email]);
-    res.json({ ok: true, puntos: cli.length ? cli[0].puntos : pts });
+    const pts = await cerrarPedido(await db(), req.body || {});
+    res.json({ ok: true, puntos: pts.puntos });
   } catch(e) { res.json({ ok: true, demo: true }); }
 });
 
@@ -698,18 +711,29 @@ app.post('/api/auth/verify', async (req, res) => {
   } catch(e) { console.error(e); res.status(500).json({ error: 'Error' }); }
 });
 
-// POST /api/create-preference  { items: [{title, quantity, unit_price}], payerEmail }
+// POST /api/create-preference  { items: [{title, quantity, unit_price}], payerEmail, order: {email,total,cupon,provincia,items} }
 app.post('/api/create-preference', async (req, res) => {
   try {
     if (!MP_TOKEN || MP_TOKEN.includes('xxxx')) {
       return res.status(500).json({ error: 'Falta MP_ACCESS_TOKEN en .env (usá credencial TEST de developers.mercadopago.com)' });
     }
-    const { items, payerEmail } = req.body || {};
+    const { items, payerEmail, order } = req.body || {};
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Carrito vacío' });
     }
 
     const front = process.env.FRONT_URL || 'http://localhost:5500';
+    const back = process.env.BACKEND_URL || 'https://acacia-production-0a93.up.railway.app';
+    const ref = 'acacia-' + Date.now();
+    // pendiente para que el webhook pueda cerrar el pedido aunque el cliente no vuelva
+    try {
+      const p = await db();
+      await ensureMpPagos(p);
+      await p.query('INSERT INTO mp_pagos (ref,email,total,cupon,provincia,items) VALUES (?,?,?,?,?,?)',
+        [ref, String(order?.email || payerEmail || '').toLowerCase(), Number(order?.total || 0),
+         String(order?.cupon || '').toUpperCase(), String(order?.provincia || '').slice(0, 80),
+         JSON.stringify(order?.items || []).slice(0, 4000)]);
+    } catch(e) { console.log('mp_pendiente:', e.message); }
     const body = {
       items: items.map(i => ({
         title: String(i.title).slice(0, 60),
@@ -725,8 +749,9 @@ app.post('/api/create-preference', async (req, res) => {
       },
       // MP solo acepta auto_return con back_urls https (prod). En localhost se vuelve manual.
       ...(front.startsWith('https://') ? { auto_return: 'approved' } : {}),
+      notification_url: back + '/api/mp-webhook',
       statement_descriptor: 'ACACIA',
-      external_reference: 'acacia-' + Date.now()
+      external_reference: ref
     };
 
     const r = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -737,11 +762,68 @@ app.post('/api/create-preference', async (req, res) => {
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json(data);
     // data.init_point (prod) y data.sandbox_init_point (test)
-    res.json({ id: data.id, init_point: data.sandbox_init_point || data.init_point, raw: data });
+    res.json({ id: data.id, init_point: data.sandbox_init_point || data.init_point, ref, raw: data });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Error creando preferencia' });
   }
+});
+
+// Webhook MP: confirma el pago del lado servidor (aunque el cliente no vuelva a la tienda).
+// Siempre responde 200 para no generar reintentos en loop.
+app.post('/api/mp-webhook', async (req, res) => {
+  try {
+    const q = req.query || {};
+    const id = req.body?.data?.id || q['data.id'] || q.id;
+    const topic = req.body?.type || q.type || q.topic;
+    if(topic && topic !== 'payment' && topic !== 'merchant_order') return res.json({ ok: true, ign: topic });
+    if(!id) return res.json({ ok: true, empty: true });
+    if(!MP_TOKEN || MP_TOKEN.includes('xxxx')) return res.json({ ok: true, notoken: true });
+    const r = await fetch('https://api.mercadopago.com/v1/payments/' + id, {
+      headers: { Authorization: 'Bearer ' + MP_TOKEN }
+    });
+    if(!r.ok) return res.json({ ok: true, unknown: id });
+    const pay = await r.json();
+    const ref = pay.external_reference || '';
+    if(!ref.startsWith('acacia-')) return res.json({ ok: true, other: ref });
+    const p = await db();
+    await ensureMpPagos(p);
+    if(pay.status !== 'approved'){
+      try { await p.query('UPDATE mp_pagos SET status=?, payment_id=? WHERE ref=?', [pay.status, String(id), ref]); } catch {}
+      return res.json({ ok: true, status: pay.status });
+    }
+    const [rows] = await p.query('SELECT * FROM mp_pagos WHERE ref=?', [ref]);
+    if(!rows.length) return res.json({ ok: true, norow: ref });
+    if(rows[0].status === 'paid') return res.json({ ok: true, dup: ref });
+    const pts = await cerrarPedido(p, rows[0]);
+    await p.query("UPDATE mp_pagos SET status='paid', payment_id=? WHERE ref=?", [String(id), ref]);
+    res.json({ ok: true, paid: ref, puntos: pts.puntos });
+  } catch(e) { console.log('webhook:', e.message); res.json({ ok: true }); }
+});
+
+// POST /api/pedido/confirmar {ref, ...legado} -> cierra una sola vez (webhook o front, el que llegue primero)
+app.post('/api/pedido/confirmar', async (req, res) => {
+  try {
+    const ref = String(req.body?.ref || '');
+    const p = await db();
+    await ensureMpPagos(p);
+    if(!ref){
+      const pts = await cerrarPedido(p, req.body || {});
+      return res.json({ ok: true, puntos: pts.puntos, legacy: true });
+    }
+    const [rows] = await p.query('SELECT * FROM mp_pagos WHERE ref=?', [ref]);
+    if(!rows.length){
+      const pts = await cerrarPedido(p, req.body || {});
+      return res.json({ ok: true, puntos: pts.puntos, legacy: true });
+    }
+    if(rows[0].status === 'paid'){
+      const [cli] = await p.query('SELECT puntos FROM clientes WHERE email=?', [rows[0].email]);
+      return res.json({ ok: true, puntos: cli.length ? cli[0].puntos : 0, already: true });
+    }
+    const pts = await cerrarPedido(p, rows[0]);
+    await p.query("UPDATE mp_pagos SET status='paid', payment_id='front' WHERE ref=?", [ref]);
+    res.json({ ok: true, puntos: pts.puntos });
+  } catch(e) { res.json({ ok: true, demo: true }); }
 });
 
 app.listen(PORT, () => {

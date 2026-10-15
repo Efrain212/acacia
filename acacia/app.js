@@ -945,13 +945,13 @@ async function payWithMP(){
     const ship = getShipCost();
     if(ship > 0) items.push({ title: "Envío", quantity: 1, unit_price: ship });
     const email = (document.getElementById("fEmail")?.value || memberEmail() || "").trim();
-    try {
-      localStorage.setItem("acacia_pending", JSON.stringify({ email: email.toLowerCase(), total: grand, cupon: couponCode, provincia: document.getElementById("fProv")?.value || "", items: cart.map(i=>{ const p=PRODUCTS.find(x=>x.id===i.id); return p?{id:p.id,n:i.qty,t:i.talle||"",pr:p.price}:null }) }));
-    } catch {}
-    const r = await fetch(AUTH_URL+"/api/create-preference",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items, payerEmail: email})});
+    const orderMeta = { email: email.toLowerCase(), total: grand, cupon: couponCode, provincia: document.getElementById("fProv")?.value || "", items: cart.map(i=>{ const p=PRODUCTS.find(x=>x.id===i.id); return p?{id:p.id,n:i.qty,t:i.talle||"",pr:p.price}:null }) };
+    try { localStorage.setItem("acacia_pending", JSON.stringify(orderMeta)); } catch {}
+    const r = await fetch(AUTH_URL+"/api/create-preference",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items, payerEmail: email, order: orderMeta})});
     const d = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.error || d.message || ("Error " + r.status));
     if(!d.init_point) throw new Error("MP no devolvió link de pago");
+    try { localStorage.setItem("acacia_pending", JSON.stringify({ ...orderMeta, ref: d.ref || "" })); } catch {}
     location.href = d.init_point;
   } catch(err) {
     if(msg) msg.textContent = "";
@@ -971,7 +971,7 @@ function handlePagoReturn(){
       let pend = null;
       try { pend = JSON.parse(localStorage.getItem("acacia_pending") || "null"); } catch {}
       if(pend?.email && BACKEND_ENABLED){
-        try { await fetch(AUTH_URL+"/api/pedido/cerrar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pend)}); } catch {}
+        try { await fetch(AUTH_URL+"/api/pedido/confirmar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pend)}); } catch {}
         try { await refreshMemberZone(); } catch {}
       }
       cart = []; saveCart();
