@@ -489,6 +489,14 @@ app.post('/api/admin/productos', requireAdmin, async (req, res) => {
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Error' }); }
 });
+app.delete('/api/admin/productos/:id', requireAdmin, async (req, res) => {
+  try {
+    const p = await db();
+    try { await ensureFotos(p); await p.query('DELETE FROM producto_fotos WHERE producto_id=?', [req.params.id]); } catch {}
+    await p.query('DELETE FROM productos WHERE id=?', [req.params.id]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'Error' }); }
+});
 // Subir foto de producto (multipart campo "foto", máx 5MB, solo imágenes). Devuelve {url}
 app.post('/api/admin/upload', requireAdmin, async (req, res) => {
   try {

@@ -1761,6 +1761,18 @@ async function renderDirecciones(main, em){
 }
 document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{ location.hash = "#/cuenta/" + b.dataset.ctab; });
 
+// Confirmación con estilo (reemplaza confirm())
+let cfResolve = null;
+function askConfirm(title, msg, okLabel){
+  document.getElementById("cfTitle").textContent = title;
+  document.getElementById("cfMsg").textContent = msg;
+  document.getElementById("cfOk").textContent = okLabel || "Eliminar";
+  document.getElementById("confirmModal").hidden = false;
+  return new Promise(res=>{ cfResolve = res; });
+}
+document.getElementById("cfOk").onclick = ()=>{ document.getElementById("confirmModal").hidden = true; if(cfResolve) cfResolve(true); cfResolve = null; };
+document.getElementById("cfCancel").onclick = ()=>{ document.getElementById("confirmModal").hidden = true; if(cfResolve) cfResolve(false); cfResolve = null; };
+
 // ===== ADMIN (oculto: se entra con usuario admin en el login de miembros) =====
 function admHeaders(){ return {"Content-Type":"application/json","x-admin-token":sessionStorage.getItem("acacia_admin")||""}; }
 function isAdmin(){ return !!sessionStorage.getItem("acacia_admin"); }
@@ -1841,6 +1853,7 @@ async function loadAdmProds(){
       const cols = String(p.color||"").split(",").map(s=>s.trim()).filter(Boolean);
       return `
       <div class="adm-prod" data-card="${p.id}">
+        <button type="button" class="pdel" data-pdel="${p.id}" title="Eliminar producto">✕</button>
         <img class="adm-thumb" data-thumb="${p.id}" src="${fullImg(p.img)||placeholderImg(p.nombre)}" alt="${p.nombre}" onerror="this.src='${placeholderImg(p.nombre)}'" />
         <div class="adm-fields">
           <label>Nombre<input data-pname="${p.id}" value="${String(p.nombre||"").replace(/"/g,"&quot;")}" /></label>
@@ -1964,6 +1977,16 @@ async function loadAdmProds(){
       fi.value = "";
       paintGal(id);
       syncProducts();
+    });
+    box.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async ()=>{
+      const id = b.dataset.pdel;
+      const name = box.querySelector(`[data-pname="${id}"]`)?.value || id;
+      if(!await askConfirm("Eliminar producto", `¿Eliminar "${name}"? Se borran sus fotos. No se puede deshacer.`)) return;
+      const m = box.querySelector(`[data-pmsg="${id}"]`);
+      if(m) m.textContent = "Eliminando...";
+      const rr = await fetch(AUTH_URL+"/api/admin/productos/"+encodeURIComponent(id),{method:"DELETE",headers:admHeaders()});
+      if(rr.ok){ loadAdmProds(); syncProducts(); }
+      else if(m) m.textContent = "✕ No se pudo eliminar (¿sesión vencida?)";
     });
     box.querySelectorAll("[data-psave]").forEach(b=>b.onclick=async ()=>{
       const id = b.dataset.psave;
