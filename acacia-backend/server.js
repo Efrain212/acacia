@@ -788,8 +788,9 @@ app.post('/api/create-preference', async (req, res) => {
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json(data);
-    // data.init_point (prod) y data.sandbox_init_point (test)
-    res.json({ id: data.id, init_point: data.sandbox_init_point || data.init_point, ref, raw: data });
+    // MP devuelve ambos links; en producción hay que usar init_point (el sandbox no cobra real)
+    const prod = (process.env.MP_MODE || 'sandbox') === 'production';
+    res.json({ id: data.id, init_point: prod ? data.init_point : (data.sandbox_init_point || data.init_point), ref, raw: data });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Error creando preferencia' });
