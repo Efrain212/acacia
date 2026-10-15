@@ -1785,10 +1785,11 @@ function showAdmin(on){
 }
 document.querySelectorAll("[data-atab]").forEach(b=>b.onclick=()=>showATab(b.dataset.atab));
 function showATab(t){
-  ["resumen","prods","peds","users","cupones","inicio","contacto","menu"].forEach(k=>document.getElementById("atab-"+k).hidden = k!==t);
+  ["resumen","prods","peds","pagos","users","cupones","inicio","contacto","menu"].forEach(k=>document.getElementById("atab-"+k).hidden = k!==t);
   document.querySelectorAll("[data-atab]").forEach(b=>b.classList.toggle("active", b.dataset.atab===t));
   if(t==="prods") loadAdmProds();
   if(t==="peds") loadAdmPeds();
+  if(t==="pagos") loadAdmPagos();
   if(t==="users") loadAdmUsers();
   if(t==="cupones") loadCupones();
   if(t==="inicio") paintTextEditor("editInicioFields", TEXTOS_INICIO);
@@ -2035,6 +2036,15 @@ async function loadAdmPeds(){
     const d = await r.json();
     box.innerHTML = d.pedidos.map(p=>`<div class="cuota-opt"><span>#${p.id} ${p.email} — $${p.total} — ${p.provincia||""}<br><span class="muted small">${p.created_at} · ${String(p.items||"").slice(0,120)}</span></span></div>`).join("") || "Sin compras";
   } catch { box.textContent = "Error"; }
+}
+async function loadAdmPagos(){
+  const box = document.getElementById("admPagos");
+  try {
+    const r = await fetch(AUTH_URL+"/api/admin/pagos-mp",{headers:admHeaders()});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error||"Error");
+    box.innerHTML = (d.pagos||[]).map(p=>`<div class="cuota-opt"><span><strong>${p.status==="paid"?"✅":"⏳"} $${Number(p.total).toLocaleString("es-AR")}</strong> — ${p.email}<br><span class="muted small">${p.ref} · MP ${p.payment_id||"—"}${p.cupon ? " · cupón "+p.cupon : ""} · ${p.created_at}</span></span></div>`).join("") || "Sin pagos MP todavía.";
+  } catch { box.textContent = "Error (¿sesión vencida?)"; }
 }
 async function loadAdmUsers(){
   const box = document.getElementById("admUsers");

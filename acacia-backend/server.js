@@ -229,6 +229,24 @@ async function cerrarPedido(p, o){
   return { puntos: cli.length ? cli[0].puntos : pts };
 }
 
+async function sendOrderEmail(to, o){
+  try {
+    const user = process.env.GMAIL_USER, pass = process.env.GMAIL_APP_PASS;
+    if(!user || !pass || pass.includes('xxxx')) return;
+    const nodemailer = require('nodemailer');
+    const tr = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass } });
+    let items = [];
+    try { items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []); } catch {}
+    const lines = (items || []).map(i=>`- ${i.n}× ${i.id}${i.t ? ' (talle '+i.t+')' : ''} — $${i.pr}`).join('<br>') || 'Tu compra';
+    await tr.sendMail({
+      from: `"Acacia Indumentaria" <${user}>`,
+      to,
+      subject: 'Tu pedido Acacia fue confirmado',
+      html: `<h2>¡Gracias por tu compra!</h2><p>Total: $${o.total}</p><p>${lines}</p><p>Coordinamos el envío por WhatsApp.</p>`
+    });
+  } catch(e) { console.log('order email:', e.message); }
+}
+
 // POST /api/pedido/cerrar {email, total, cupon} -> suma puntos y marca cupón usado
 app.post('/api/pedido/cerrar', async (req, res) => {
   try {
@@ -439,6 +457,15 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
 });
 app.get('/api/admin/pedidos', requireAdmin, async (req, res) => {
   try { const [rows] = await (await db()).query('SELECT * FROM pedidos ORDER BY id DESC LIMIT 100'); res.json({ ok: true, pedidos: rows }); }
+  catch(e) { res.status(500).json({ error: 'Error' }); }
+});
+app.get('/api/admin/pagos-mp', requireAdmin, async (req, res) => {
+  try {
+    const p = await db();
+    await ensureMpPagos(p);
+    const [rows] = await p.query('SELECT ref,email,total,cupon,status,payment_id,created_at FROM mp_pagos ORDER BY created_at DESC LIMIT 100');
+    res.json({ ok: true, pagos: rows });
+  }
   catch(e) { res.status(500).json({ error: 'Error' }); }
 });
 app.get('/api/admin/usuarios', requireAdmin, async (req, res) => {
@@ -797,6 +824,7 @@ app.post('/api/mp-webhook', async (req, res) => {
     if(rows[0].status === 'paid') return res.json({ ok: true, dup: ref });
     const pts = await cerrarPedido(p, rows[0]);
     await p.query("UPDATE mp_pagos SET status='paid', payment_id=? WHERE ref=?", [String(id), ref]);
+    sendOrderEmail(rows[0].email, rows[0]);
     res.json({ ok: true, paid: ref, puntos: pts.puntos });
   } catch(e) { console.log('webhook:', e.message); res.json({ ok: true }); }
 });
@@ -809,11 +837,13 @@ app.post('/api/pedido/confirmar', async (req, res) => {
     await ensureMpPagos(p);
     if(!ref){
       const pts = await cerrarPedido(p, req.body || {});
+      sendOrderEmail(req.body?.email, req.body || {});
       return res.json({ ok: true, puntos: pts.puntos, legacy: true });
     }
     const [rows] = await p.query('SELECT * FROM mp_pagos WHERE ref=?', [ref]);
     if(!rows.length){
       const pts = await cerrarPedido(p, req.body || {});
+      sendOrderEmail(req.body?.email, req.body || {});
       return res.json({ ok: true, puntos: pts.puntos, legacy: true });
     }
     if(rows[0].status === 'paid'){
@@ -822,6 +852,7 @@ app.post('/api/pedido/confirmar', async (req, res) => {
     }
     const pts = await cerrarPedido(p, rows[0]);
     await p.query("UPDATE mp_pagos SET status='paid', payment_id='front' WHERE ref=?", [ref]);
+    sendOrderEmail(rows[0].email, rows[0]);
     res.json({ ok: true, puntos: pts.puntos });
   } catch(e) { res.json({ ok: true, demo: true }); }
 });
