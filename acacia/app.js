@@ -835,21 +835,30 @@ function compressImg(file){
 document.querySelectorAll(".field input").forEach(inp=>inp.addEventListener("input", ()=>{ const w=inp.closest(".field"); if(w){ w.classList.remove("bad"); const e=w.querySelector(".err"); if(e) e.hidden=true; } }));
 ["cardExp","nxCardExp","dbExp"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input", ()=>fmtExp(el)); });
 ["dbCvv","nxCardCvv","cardCvv"].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener("input", ()=>{ el.value=el.value.replace(/\D/g,"").slice(0,4); }); });
+function setCouponMsg(text, ok){
+  const m = document.getElementById("couponMsg");
+  if(!m) return;
+  m.hidden = !text;
+  m.textContent = text || "";
+  m.style.color = ok ? "#2e7d32" : "#c0392b";
+  m.style.fontWeight = "700";
+}
 document.getElementById("applyCoupon").onclick = async ()=>{
   const c = (document.getElementById("couponCode").value||"").trim().toUpperCase();
   let email = "";
   try { email = JSON.parse(localStorage.getItem("acacia_member")||"null")?.email || ""; } catch {}
+  if(!c){ couponDisc = 0; couponCode = ""; setCouponMsg("Error: debe colocar un cupón válido", false); updateSummary(); return; }
   // fallback backend, si no hay backend usa local
   try {
     const r = await fetch(AUTH_URL+"/api/promos/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:c,email})});
     const d = await r.json();
     if(!r.ok) throw new Error(d.error||"Error");
     couponDisc = d.desc; couponCode = d.code;
-    alert(`Cupón ${d.code} aplicado (${Math.round(d.desc*100)}% off)`);
+    setCouponMsg(`Cupón ${d.code} aplicado (${Math.round(d.desc*100)}% off)`, true);
   } catch(err) {
-    if(c==="ACACIA10"){ couponDisc=0.10; couponCode=c; alert("Cupón 10% aplicado (local)"); }
-    else if(c==="MIEMBRO15" && email){ couponDisc=0.15; couponCode=c; alert("Cupón miembro 15% aplicado (local)"); }
-    else { couponDisc=0; couponCode=""; alert("✕ "+err.message); }
+    if(c==="ACACIA10"){ couponDisc=0.10; couponCode=c; setCouponMsg("Cupón 10% aplicado", true); }
+    else if(c==="MIEMBRO15" && email){ couponDisc=0.15; couponCode=c; setCouponMsg("Cupón miembro 15% aplicado", true); }
+    else { couponDisc=0; couponCode=""; setCouponMsg("Error: debe colocar un cupón válido", false); }
   }
   updateSummary();
 };
