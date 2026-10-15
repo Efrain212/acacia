@@ -709,6 +709,7 @@ app.post('/api/create-preference', async (req, res) => {
       return res.status(400).json({ error: 'Carrito vacío' });
     }
 
+    const front = process.env.FRONT_URL || 'http://localhost:5500';
     const body = {
       items: items.map(i => ({
         title: String(i.title).slice(0, 60),
@@ -718,11 +719,12 @@ app.post('/api/create-preference', async (req, res) => {
       })),
       payer: payerEmail ? { email: payerEmail } : undefined,
       back_urls: {
-        success: (process.env.FRONT_URL || 'http://localhost:5500') + '/?pago=exito',
-        failure: (process.env.FRONT_URL || 'http://localhost:5500') + '/?pago=fallo',
-        pending: (process.env.FRONT_URL || 'http://localhost:5500') + '/?pago=pendiente'
+        success: front + '/?pago=exito',
+        failure: front + '/?pago=fallo',
+        pending: front + '/?pago=pendiente'
       },
-      auto_return: 'approved',
+      // MP solo acepta auto_return con back_urls https (prod). En localhost se vuelve manual.
+      ...(front.startsWith('https://') ? { auto_return: 'approved' } : {}),
       statement_descriptor: 'ACACIA',
       external_reference: 'acacia-' + Date.now()
     };

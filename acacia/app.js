@@ -929,6 +929,61 @@ function doConfirm(){
 };
 document.getElementById("confirmOrder").onclick = ()=>doConfirm();
 document.getElementById("confirmOrderSide").onclick = ()=>doConfirm();
+// ===== Mercado Pago sandbox (Checkout Pro) =====
+async function payWithMP(){
+  const msg = document.getElementById("mpMsg");
+  try {
+    if(!cart.length){ alert("El carrito está vacío"); return; }
+    if(!validStep1()){ gotoStep(1); return; }
+    if(msg) msg.textContent = "Creando pago en Mercado Pago...";
+    const grand = updateSummary();
+    const items = cart.map(i=>{
+      const p = PRODUCTS.find(x=>x.id===i.id);
+      if(!p) return null;
+      return { title: (p.name + (i.talle ? " talle "+i.talle : "")).slice(0, 60), quantity: i.qty, unit_price: Math.round(p.price * (1 - couponDisc)) };
+    }).filter(Boolean);
+    const ship = getShipCost();
+    if(ship > 0) items.push({ title: "Envío", quantity: 1, unit_price: ship });
+    const email = (document.getElementById("fEmail")?.value || memberEmail() || "").trim();
+    try {
+      localStorage.setItem("acacia_pending", JSON.stringify({ email: email.toLowerCase(), total: grand, cupon: couponCode, provincia: document.getElementById("fProv")?.value || "", items: cart.map(i=>{ const p=PRODUCTS.find(x=>x.id===i.id); return p?{id:p.id,n:i.qty,t:i.talle||"",pr:p.price}:null }) }));
+    } catch {}
+    const r = await fetch(AUTH_URL+"/api/create-preference",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items, payerEmail: email})});
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.error || d.message || ("Error " + r.status));
+    if(!d.init_point) throw new Error("MP no devolvió link de pago");
+    location.href = d.init_point;
+  } catch(err) {
+    if(msg) msg.textContent = "";
+    alert("✕ MP: " + err.message);
+  }
+}
+function handlePagoReturn(){
+  let pago = "";
+  try { pago = new URLSearchParams(location.search).get("pago") || ""; } catch { pago = ""; }
+  if(!pago) return;
+  setTimeout(async ()=>{
+    if(pago === "exito"){
+      let pend = null;
+      try { pend = JSON.parse(localStorage.getItem("acacia_pending") || "null"); } catch {}
+      if(pend?.email && BACKEND_ENABLED){
+        try { await fetch(AUTH_URL+"/api/pedido/cerrar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pend)}); } catch {}
+        try { await refreshMemberZone(); } catch {}
+      }
+      cart = []; saveCart();
+      try { localStorage.removeItem("acacia_pending"); } catch {}
+      document.getElementById("thanksDetail").innerHTML = "Pago con Mercado Pago acreditado (sandbox). Coordinamos el envío por WhatsApp.";
+      document.getElementById("thanksDetail").hidden = false;
+      document.getElementById("thanksModal").hidden = false;
+    } else if(pago === "pendiente"){
+      alert("Pago pendiente en Mercado Pago. Te avisamos cuando se acredite.");
+    } else if(pago === "fallo"){
+      alert("El pago fue rechazado o cancelado. Probá de nuevo.");
+    }
+    try { history.replaceState({}, "", location.pathname + location.hash); } catch {}
+  }, 600);
+}
+document.getElementById("payMP").onclick = payWithMP;
 document.getElementById("viewSummary").onclick = ()=>{
   const d = document.getElementById("thanksDetail");
   d.hidden = !d.hidden;
@@ -1986,6 +2041,7 @@ if(!BACKEND_ENABLED){
 }
 paintMember();
 render();
+handlePagoReturn();
 loadTextos();
 loadMenu();
 applyRoute(false);
