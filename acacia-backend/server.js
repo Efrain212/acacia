@@ -17,9 +17,11 @@ app.get('/api/health', (req, res) => res.json({ ok: true, gmail: !!(process.env.
 // --- MySQL clientes (XAMPP por defecto: host 127.0.0.1 user root sin pass, db acacia) ---
 const dbConf = {
   host: process.env.DB_HOST || '127.0.0.1',
+  port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'acacia'
+  database: process.env.DB_NAME || 'acacia',
+  ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {})
 };
 let pool = null;
 async function db(){
